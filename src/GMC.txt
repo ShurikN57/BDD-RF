@@ -741,13 +741,14 @@ Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConfor
         End If
     End If
 
-    If confCible = LCase$(VAL_CONF_1) Or confCible = LCase$(VAL_CONF_2) Then
-        LigneExamenPourControleDate = False
+    If confActuelle = LCase$(VAL_CONF_3) Or confCible = LCase$(VAL_CONF_3) Then
+        LigneExamenPourControleDate = True
         Exit Function
     End If
 
-    If confActuelle = LCase$(VAL_CONF_3) Or confCible = LCase$(VAL_CONF_3) Then
-        LigneExamenPourControleDate = True
+    If confCible = LCase$(VAL_CONF_1) Or confCible = LCase$(VAL_CONF_2) Then
+        LigneExamenPourControleDate = False
+        Exit Function
     End If
 
 End Function
