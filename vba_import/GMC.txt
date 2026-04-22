@@ -656,12 +656,110 @@ End Sub
 ' 8. SUIVI AGENT (SPECIFIQUE BDD-RF)
 ' =============================================
 
+Private Function ManqueChampsObligatoiresPourConforme(ByVal lig As Long) As Boolean
+
+    If lig < ROW_START Then Exit Function
+
+    If Trim$(CStr(Me.Cells(lig, COL_LIBELLE_MAIN).Value)) = "" Then
+        ManqueChampsObligatoiresPourConforme = True
+        Exit Function
+    End If
+
+    If Trim$(CStr(Me.Cells(lig, COL_LOCAL_MAIN).Value)) = "" Then
+        ManqueChampsObligatoiresPourConforme = True
+        Exit Function
+    End If
+
+    If Trim$(CStr(Me.Cells(lig, COL_CONTROLE_MAIN).Value)) = "" Then
+        ManqueChampsObligatoiresPourConforme = True
+        Exit Function
+    End If
+
+    If Trim$(CStr(Me.Cells(lig, COL_SITUATION_MAIN).Value)) = "" Then
+        ManqueChampsObligatoiresPourConforme = True
+        Exit Function
+    End If
+
+End Function
+
+Private Sub ForcerExamenSiConformeIncomplet(ByVal rngSource As Range, ByRef rngConfModifiee As Range)
+
+    Dim dictRows As Object
+    Dim area As Range
+    Dim cell As Range
+    Dim lig As Long
+    Dim cle As Variant
+    Dim valConf As String
+
+    If rngSource Is Nothing Then Exit Sub
+
+    Set dictRows = CreateObject("Scripting.Dictionary")
+
+    For Each area In rngSource.Areas
+        For Each cell In area.Cells
+            lig = cell.Row
+            If lig >= ROW_START Then
+                If Not dictRows.Exists(CStr(lig)) Then
+                    dictRows.Add CStr(lig), lig
+                End If
+            End If
+        Next cell
+    Next area
+
+    For Each cle In dictRows.Keys
+        lig = CLng(dictRows(cle))
+        valConf = LCase$(Trim$(CStr(Me.Cells(lig, COL_CONF).Value)))
+
+        If valConf = LCase$(VAL_CONF_1) Then
+            If ManqueChampsObligatoiresPourConforme(lig) Then
+                Me.Cells(lig, COL_CONF).Value = VAL_CONF_3
+
+                If rngConfModifiee Is Nothing Then
+                    Set rngConfModifiee = Me.Cells(lig, COL_CONF)
+                Else
+                    Set rngConfModifiee = Union(rngConfModifiee, Me.Cells(lig, COL_CONF))
+                End If
+            End If
+        End If
+    Next cle
+
+End Sub
+
+Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConformite As Range) As Boolean
+
+    Dim confActuelle As String
+    Dim confCible As String
+    Dim cellConf As Range
+
+    confActuelle = LCase$(Trim$(CStr(Me.Cells(lig, COL_CONF).Value)))
+    confCible = confActuelle
+
+    If Not zoneConformite Is Nothing Then
+        Set cellConf = Intersect(zoneConformite, Me.Cells(lig, COL_CONF))
+        If Not cellConf Is Nothing Then
+            confCible = LCase$(Trim$(CStr(cellConf.Value)))
+        End If
+    End If
+
+    If confCible = LCase$(VAL_CONF_1) Or confCible = LCase$(VAL_CONF_2) Then
+        LigneExamenPourControleDate = False
+        Exit Function
+    End If
+
+    If confActuelle = LCase$(VAL_CONF_3) Or confCible = LCase$(VAL_CONF_3) Then
+        LigneExamenPourControleDate = True
+    End If
+
+End Function
+
 Private Sub HandleSuiviAgent(ByVal Target As Range)
 
     On Error GoTo CleanFail
 
     Dim zoneProtegee As Range
     Dim zoneConformite As Range
+    Dim zoneControleConforme As Range
+    Dim zoneConfForcee As Range
     Dim cell As Range
     Dim cellAC As Range
     Dim area As Range
@@ -677,6 +775,8 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
     Dim firstLig As Long, lastLig As Long
     Dim idx As Long
     Dim eventsWereDisabled As Boolean
+    Dim bMsgConformeImpossible As Boolean
+    Dim bLigneExamen As Boolean
 
     Set zoneProtegee = Intersect(Target, Union(Me.Range(PLAGE_EDITABLE_MAIN), Me.Range(PLAGE_EDITABLE_SUIVI), Me.Range(PLAGE_EDITABLE_AIDE)))
     If zoneProtegee Is Nothing Then GoTo SortiePropre
@@ -687,6 +787,12 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
     If nomSession = "" Or Not IsDate(dateSession) Then GoTo SortiePropre
 
     Set zoneConformite = Intersect(Target, Me.Range(COL_CONF & ROW_START & ":" & COL_CONF & Me.Rows.Count))
+    Set zoneControleConforme = Intersect(Target, Union( _
+        Me.Range(COL_LIBELLE_MAIN & ROW_START & ":" & COL_LOCAL_MAIN & Me.Rows.Count), _
+        Me.Range(COL_CONTROLE_MAIN & ROW_START & ":" & COL_SITUATION_MAIN & Me.Rows.Count), _
+        Me.Range(COL_CONF & ROW_START & ":" & COL_CONF & Me.Rows.Count) _
+    ))
+
     If Not zoneConformite Is Nothing Then
         For Each cellAC In zoneConformite.Cells
             valConf = LCase$(Trim$(CStr(cellAC.Value)))
@@ -706,6 +812,7 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
             If Not ModeDeveloppeurActif Then
                 nomLigne = Trim$(CStr(Me.Cells(lig, COL_NOM).Value))
                 dateLigne = Me.Cells(lig, COL_DATE).Value
+                bLigneExamen = LigneExamenPourControleDate(lig, zoneConformite)
 
                 If nomLigne <> "" Then
                     If StrComp(nomLigne, nomSession, vbTextCompare) <> 0 Then
@@ -717,9 +824,11 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
 
                 If IsDate(dateLigne) Then
                     If CDate(dateLigne) <> CDate(dateSession) Then
-                        AnnulerDerniereAction
-                        MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
-                        GoTo SortiePropre
+                        If Not bLigneExamen Then
+                            AnnulerDerniereAction
+                            MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                            GoTo SortiePropre
+                        End If
                     End If
                 End If
             End If
@@ -737,6 +846,11 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
                 If Trim$(CStr(Me.Cells(lig, COL_NOM).Value)) = "" Then
                     Me.Cells(lig, COL_NOM).Value = nomSession
                 End If
+            End If
+
+            If Not zoneControleConforme Is Nothing Then
+                ForcerExamenSiConformeIncomplet zoneControleConforme, zoneConfForcee
+                If Not zoneConfForcee Is Nothing Then bMsgConformeImpossible = True
             End If
 
             GoTo SortieAvecCouleur
@@ -768,6 +882,8 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
                         nomLigne = Trim$(CStr(arrNomDate(idx, 2)))
                     End If
 
+                    bLigneExamen = LigneExamenPourControleDate(lig, zoneConformite)
+
                     If nomLigne <> "" Then
                         If StrComp(nomLigne, nomSession, vbTextCompare) <> 0 Then
                             AnnulerDerniereAction
@@ -778,9 +894,11 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
 
                     If IsDate(dateLigne) Then
                         If CDate(dateLigne) <> CDate(dateSession) Then
-                            AnnulerDerniereAction
-                            MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
-                            GoTo SortiePropre
+                            If Not bLigneExamen Then
+                                AnnulerDerniereAction
+                                MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                                GoTo SortiePropre
+                            End If
                         End If
                     End If
                 End If
@@ -788,64 +906,84 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
         Next cell
     End If
 
-    If zoneConformite Is Nothing Then GoTo SortiePropre
+    If zoneConformite Is Nothing And zoneControleConforme Is Nothing Then GoTo SortiePropre
 
     Application.EnableEvents = False
     eventsWereDisabled = True
 
-    For Each area In zoneConformite.Areas
+    If Not zoneConformite Is Nothing Then
+        For Each area In zoneConformite.Areas
 
-        If area.Cells.CountLarge = 1 Then
+            If area.Cells.CountLarge = 1 Then
 
-            If Trim$(CStr(area.Value)) = "" Then
-                Me.Cells(area.Row, COL_DATE).ClearContents
-                Me.Cells(area.Row, COL_NOM).ClearContents
+                If Trim$(CStr(area.Value)) = "" Then
+                    Me.Cells(area.Row, COL_DATE).ClearContents
+                    Me.Cells(area.Row, COL_NOM).ClearContents
+                Else
+                    If Trim$(CStr(Me.Cells(area.Row, COL_DATE).Value)) = "" Then
+                        Me.Cells(area.Row, COL_DATE).Value = CDate(dateSession)
+                    End If
+                    If Trim$(CStr(Me.Cells(area.Row, COL_NOM).Value)) = "" Then
+                        Me.Cells(area.Row, COL_NOM).Value = nomSession
+                    End If
+                End If
+
             Else
-                If Trim$(CStr(Me.Cells(area.Row, COL_DATE).Value)) = "" Then
-                    Me.Cells(area.Row, COL_DATE).Value = CDate(dateSession)
-                End If
-                If Trim$(CStr(Me.Cells(area.Row, COL_NOM).Value)) = "" Then
-                    Me.Cells(area.Row, COL_NOM).Value = nomSession
-                End If
+                firstLig = area.Row
+                lastLig = area.Row + area.Rows.Count - 1
+
+                arrConf = area.Value
+                arrDate = Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value
+                arrNom = Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value
+
+                For i = 1 To UBound(arrConf, 1)
+                    If Me.FilterMode Then
+                        If Me.Rows(firstLig + i - 1).Hidden Then GoTo LigneSuivante
+                    End If
+
+                    If Trim$(CStr(arrConf(i, 1))) = "" Then
+                        arrDate(i, 1) = ""
+                        arrNom(i, 1) = ""
+                    Else
+                        If Trim$(CStr(arrDate(i, 1))) = "" Then arrDate(i, 1) = CDate(dateSession)
+                        If Trim$(CStr(arrNom(i, 1))) = "" Then arrNom(i, 1) = nomSession
+                    End If
+LigneSuivante:
+                Next i
+
+                Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value = arrDate
+                Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value = arrNom
+
             End If
 
-        Else
-            firstLig = area.Row
-            lastLig = area.Row + area.Rows.Count - 1
+        Next area
+    End If
 
-            arrConf = area.Value
-            arrDate = Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value
-            arrNom = Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value
-
-            For i = 1 To UBound(arrConf, 1)
-                If Me.FilterMode Then
-                    If Me.Rows(firstLig + i - 1).Hidden Then GoTo LigneSuivante
-                End If
-
-                If Trim$(CStr(arrConf(i, 1))) = "" Then
-                    arrDate(i, 1) = ""
-                    arrNom(i, 1) = ""
-                Else
-                    If Trim$(CStr(arrDate(i, 1))) = "" Then arrDate(i, 1) = CDate(dateSession)
-                    If Trim$(CStr(arrNom(i, 1))) = "" Then arrNom(i, 1) = nomSession
-                End If
-LigneSuivante:
-            Next i
-
-            Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value = arrDate
-            Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value = arrNom
-
-        End If
-
-    Next area
+    If Not zoneControleConforme Is Nothing Then
+        ForcerExamenSiConformeIncomplet zoneControleConforme, zoneConfForcee
+        If Not zoneConfForcee Is Nothing Then bMsgConformeImpossible = True
+    End If
 
 SortieAvecCouleur:
+    If Not zoneConfForcee Is Nothing Then
+        If zoneConformite Is Nothing Then
+            Set zoneConformite = zoneConfForcee
+        Else
+            Set zoneConformite = Union(zoneConformite, zoneConfForcee)
+        End If
+    End If
+
     If Not zoneConformite Is Nothing Then
         CouleurConformiteZone zoneConformite
     End If
 
 SortiePropre:
     If eventsWereDisabled Then Application.EnableEvents = True
+
+    If bMsgConformeImpossible Then
+        MsgBox "Conforme impossible : Remplissez les champs obligatoires. Passage en examen.", vbExclamation
+    End If
+
     Exit Sub
 
 CleanFail:
@@ -1758,5 +1896,3 @@ Private Sub RetirerBordureSelectionActive()
 Fin:
 
 End Sub
-
-
