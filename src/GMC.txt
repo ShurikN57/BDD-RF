@@ -715,11 +715,13 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
                     End If
                 End If
 
-                If IsDate(dateLigne) Then
-                    If CDate(dateLigne) <> CDate(dateSession) Then
-                        AnnulerDerniereAction
-                        MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
-                        GoTo SortiePropre
+                If DoitVerifierDatePourEdition(Me, Target) Then
+                    If IsDate(dateLigne) Then
+                        If CDate(dateLigne) <> CDate(dateSession) Then
+                            AnnulerDerniereAction
+                            MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                            GoTo SortiePropre
+                        End If
                     End If
                 End If
             End If
@@ -776,11 +778,13 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
                         End If
                     End If
 
-                    If IsDate(dateLigne) Then
-                        If CDate(dateLigne) <> CDate(dateSession) Then
-                            AnnulerDerniereAction
-                            MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
-                            GoTo SortiePropre
+                    If DoitVerifierDatePourEdition(Me, cell) Then
+                        If IsDate(dateLigne) Then
+                            If CDate(dateLigne) <> CDate(dateSession) Then
+                                AnnulerDerniereAction
+                                MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                                GoTo SortiePropre
+                            End If
                         End If
                     End If
                 End If
@@ -1478,7 +1482,38 @@ Private Function ConstruireMessageErreurDetaillee(ByVal cell As Range) As String
 End Function
 
 ' =============================================
-' 21. REFERENTIELS RF - CHARGEMENT MEMOIRE
+' 21. DoitVerifierDatePourEdition
+' =============================================
+Private Function DoitVerifierDatePourEdition(ByVal ws As Worksheet, ByVal cell As Range) As Boolean
+
+    If cell Is Nothing Then
+        DoitVerifierDatePourEdition = True
+        Exit Function
+    End If
+
+    If cell.Column <> ws.Range(COL_CONF & "1").Column Then
+        DoitVerifierDatePourEdition = True
+        Exit Function
+    End If
+
+    DoitVerifierDatePourEdition = EstConformiteSoumiseRegleDate(cell.Value)
+
+End Function
+
+' =============================================
+' 22. EstConformiteSoumiseRegleDate
+' =============================================
+Private Function EstConformiteSoumiseRegleDate(ByVal valeur As Variant) As Boolean
+
+    Dim valNorm As String
+    valNorm = LCase$(Trim$(CStr(valeur)))
+
+    EstConformiteSoumiseRegleDate = (valNorm = LCase$(VAL_CONF_1) Or valNorm = LCase$(VAL_CONF_2))
+
+End Function
+
+' =============================================
+' 23. REFERENTIELS RF - CHARGEMENT MEMOIRE
 ' =============================================
 Private Sub ChargerColonneDansDictionnaire(ByVal ws As Worksheet, ByRef dict As Object)
 
@@ -1758,5 +1793,3 @@ Private Sub RetirerBordureSelectionActive()
 Fin:
 
 End Sub
-
-

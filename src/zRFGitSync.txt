@@ -7,9 +7,7 @@ Option Explicit
 ' - vba_import = version native réimportable dans Excel
 ' =============================================
 
-Private Const DOSSIER_REPO As String = "C:\Users\FMF00CDN\Desktop\BDD-RF-GitHub"
-Private Const DOSSIER_CODEX As String = DOSSIER_REPO & "\src"
-Private Const DOSSIER_IMPORT As String = DOSSIER_REPO & "\vba_import"
+Private Const DOSSIER_REPO_ENV As String = "BDD_RF_REPO_DIR"
 
 Private Const NOM_THISWORKBOOK As String = "zRFThisWorkbook"
 Private Const NOM_FEUILLE_CIBLE As String = "GMC"
@@ -27,12 +25,19 @@ Public Sub ExporterProjetVersGitHubEtImportExcel()
 
     Dim vbProj As Object
     Dim vbComp As Object
+    Dim dossierRepo As String
+    Dim dossierCodex As String
+    Dim dossierImport As String
 
     If Not ProjetVBAccessible() Then Exit Sub
 
-    CreerDossierSiAbsent DOSSIER_REPO
-    CreerDossierSiAbsent DOSSIER_CODEX
-    CreerDossierSiAbsent DOSSIER_IMPORT
+    dossierRepo = DossierRepo()
+    dossierCodex = DossierCodex()
+    dossierImport = DossierImport()
+
+    CreerDossierSiAbsent dossierRepo
+    CreerDossierSiAbsent dossierCodex
+    CreerDossierSiAbsent dossierImport
 
     Set vbProj = ThisWorkbook.VBProject
 
@@ -43,20 +48,20 @@ Public Sub ExporterProjetVersGitHubEtImportExcel()
         Select Case vbComp.Type
 
             Case TYPE_STD_MODULE
-                ExporterCodeLisibleUTF8 vbComp, DOSSIER_CODEX & "\" & vbComp.Name & ".bas"
-                ExporterComposantNatif vbComp, DOSSIER_IMPORT & "\" & vbComp.Name & ".bas"
+                ExporterCodeLisibleUTF8 vbComp, dossierCodex & "\" & vbComp.Name & ".bas"
+                ExporterComposantNatif vbComp, dossierImport & "\" & vbComp.Name & ".bas"
 
             Case TYPE_CLASS_MODULE
-                ExporterCodeLisibleUTF8 vbComp, DOSSIER_CODEX & "\" & vbComp.Name & ".cls"
-                ExporterComposantNatif vbComp, DOSSIER_IMPORT & "\" & vbComp.Name & ".cls"
+                ExporterCodeLisibleUTF8 vbComp, dossierCodex & "\" & vbComp.Name & ".cls"
+                ExporterComposantNatif vbComp, dossierImport & "\" & vbComp.Name & ".cls"
 
             Case TYPE_USERFORM
                 ExporterUserFormComplet vbComp
 
             Case TYPE_DOCUMENT
                 If vbComp.Name = NOM_THISWORKBOOK Or vbComp.Name = NOM_FEUILLE_CIBLE Then
-                    ExporterDocumentModule vbComp, DOSSIER_CODEX & "\" & vbComp.Name & ".txt"
-                    ExporterDocumentModule vbComp, DOSSIER_IMPORT & "\" & vbComp.Name & ".txt"
+                    ExporterDocumentModule vbComp, dossierCodex & "\" & vbComp.Name & ".txt"
+                    ExporterDocumentModule vbComp, dossierImport & "\" & vbComp.Name & ".txt"
                 End If
 
         End Select
@@ -65,8 +70,8 @@ SuiteComposant:
     Next vbComp
 
     MsgBox "Export terminé :" & vbCrLf & _
-           "- GitHub / Codex : " & DOSSIER_CODEX & vbCrLf & _
-           "- Réimport Excel : " & DOSSIER_IMPORT, vbInformation
+           "- GitHub / Codex : " & dossierCodex & vbCrLf & _
+           "- Réimport Excel : " & dossierImport, vbInformation
 
 End Sub
 
@@ -76,11 +81,14 @@ End Sub
 Public Sub ImporterProjetDepuisGitHub()
 
     On Error GoTo ErrHandler
+    Dim dossierImport As String
 
     If Not ProjetVBAccessible() Then Exit Sub
 
-    If Dir(DOSSIER_IMPORT, vbDirectory) = "" Then
-        MsgBox "Dossier introuvable : " & DOSSIER_IMPORT, vbExclamation
+    dossierImport = DossierImport()
+
+    If Dir(dossierImport, vbDirectory) = "" Then
+        MsgBox "Dossier introuvable : " & dossierImport, vbExclamation
         Exit Sub
     End If
 
@@ -88,18 +96,18 @@ Public Sub ImporterProjetDepuisGitHub()
     Application.EnableEvents = False
     Application.DisplayAlerts = False
 
-    ImporterModulesStandards
-    ImporterClasses
-    ImporterUserForms
+    ImporterModulesStandards dossierImport
+    ImporterClasses dossierImport
+    ImporterUserForms dossierImport
 
-    RemplacerCodeDocumentDepuisFichier DOSSIER_IMPORT & "\" & NOM_FEUILLE_CIBLE & ".txt", NOM_FEUILLE_CIBLE
-    RemplacerCodeDocumentDepuisFichier DOSSIER_IMPORT & "\" & NOM_THISWORKBOOK & ".txt", NOM_THISWORKBOOK
+    RemplacerCodeDocumentDepuisFichier dossierImport & "\" & NOM_FEUILLE_CIBLE & ".txt", NOM_FEUILLE_CIBLE
+    RemplacerCodeDocumentDepuisFichier dossierImport & "\" & NOM_THISWORKBOOK & ".txt", NOM_THISWORKBOOK
 
     Application.DisplayAlerts = True
     Application.EnableEvents = True
     Application.ScreenUpdating = True
 
-    MsgBox "Import terminé depuis : " & DOSSIER_IMPORT, vbInformation
+    MsgBox "Import terminé depuis : " & dossierImport, vbInformation
     Exit Sub
 
 ErrHandler:
@@ -127,9 +135,7 @@ End Sub
 
 Private Sub ExporterComposantNatif(ByVal vbComp As Object, ByVal cheminFinal As String)
 
-    On Error Resume Next
-    Kill cheminFinal
-    On Error GoTo 0
+    SupprimerFichierSiExiste cheminFinal, "ExporterComposantNatif"
 
     vbComp.Export cheminFinal
 
@@ -144,28 +150,29 @@ Private Sub ExporterUserFormComplet(ByVal vbComp As Object)
     Dim cheminCodexFrm As String
     Dim cheminCodexFrx As String
     Dim contenuFrm As String
+    Dim dossierImport As String
+    Dim dossierCodex As String
 
-    cheminImportFrm = DOSSIER_IMPORT & "\" & vbComp.Name & ".frm"
-    cheminImportFrx = DOSSIER_IMPORT & "\" & vbComp.Name & ".frx"
+    dossierImport = DossierImport()
+    dossierCodex = DossierCodex()
 
-    On Error Resume Next
-    Kill cheminImportFrm
-    Kill cheminImportFrx
-    On Error GoTo 0
+    cheminImportFrm = dossierImport & "\" & vbComp.Name & ".frm"
+    cheminImportFrx = dossierImport & "\" & vbComp.Name & ".frx"
+
+    SupprimerFichierSiExiste cheminImportFrm, "ExporterUserFormComplet"
+    SupprimerFichierSiExiste cheminImportFrx, "ExporterUserFormComplet"
 
     vbComp.Export cheminImportFrm
 
     cheminTempFrm = Environ$("TEMP") & "\" & vbComp.Name & "_codex.frm"
     cheminTempFrx = Environ$("TEMP") & "\" & vbComp.Name & "_codex.frx"
-    cheminCodexFrm = DOSSIER_CODEX & "\" & vbComp.Name & ".frm"
-    cheminCodexFrx = DOSSIER_CODEX & "\" & vbComp.Name & ".frx"
+    cheminCodexFrm = dossierCodex & "\" & vbComp.Name & ".frm"
+    cheminCodexFrx = dossierCodex & "\" & vbComp.Name & ".frx"
 
-    On Error Resume Next
-    Kill cheminTempFrm
-    Kill cheminTempFrx
-    Kill cheminCodexFrm
-    Kill cheminCodexFrx
-    On Error GoTo 0
+    SupprimerFichierSiExiste cheminTempFrm, "ExporterUserFormComplet"
+    SupprimerFichierSiExiste cheminTempFrx, "ExporterUserFormComplet"
+    SupprimerFichierSiExiste cheminCodexFrm, "ExporterUserFormComplet"
+    SupprimerFichierSiExiste cheminCodexFrx, "ExporterUserFormComplet"
 
     vbComp.Export cheminTempFrm
 
@@ -176,29 +183,27 @@ Private Sub ExporterUserFormComplet(ByVal vbComp As Object)
         CopierFichierBinaire cheminTempFrx, cheminCodexFrx
     End If
 
-    On Error Resume Next
-    Kill cheminTempFrm
-    Kill cheminTempFrx
-    On Error GoTo 0
+    SupprimerFichierSiExiste cheminTempFrm, "ExporterUserFormComplet"
+    SupprimerFichierSiExiste cheminTempFrx, "ExporterUserFormComplet"
 
 End Sub
 
 ' =============================================
 ' 4. Imports unitaires
 ' =============================================
-Private Sub ImporterModulesStandards()
+Private Sub ImporterModulesStandards(ByVal dossierImport As String)
 
     Dim fichier As String
     Dim nomComp As String
 
-    fichier = Dir(DOSSIER_IMPORT & "\*.bas")
+    fichier = Dir(dossierImport & "\*.bas")
 
     Do While Len(fichier) > 0
         nomComp = NomSansExtension(fichier)
 
         If Not DoitEtreIgnore(nomComp) Then
             SupprimerComposantSiExiste nomComp, TYPE_STD_MODULE
-            ThisWorkbook.VBProject.VBComponents.Import DOSSIER_IMPORT & "\" & fichier
+            ThisWorkbook.VBProject.VBComponents.Import dossierImport & "\" & fichier
         End If
 
         fichier = Dir
@@ -206,19 +211,19 @@ Private Sub ImporterModulesStandards()
 
 End Sub
 
-Private Sub ImporterClasses()
+Private Sub ImporterClasses(ByVal dossierImport As String)
 
     Dim fichier As String
     Dim nomComp As String
 
-    fichier = Dir(DOSSIER_IMPORT & "\*.cls")
+    fichier = Dir(dossierImport & "\*.cls")
 
     Do While Len(fichier) > 0
         nomComp = NomSansExtension(fichier)
 
         If Not DoitEtreIgnore(nomComp) Then
             SupprimerComposantSiExiste nomComp, TYPE_CLASS_MODULE
-            ThisWorkbook.VBProject.VBComponents.Import DOSSIER_IMPORT & "\" & fichier
+            ThisWorkbook.VBProject.VBComponents.Import dossierImport & "\" & fichier
         End If
 
         fichier = Dir
@@ -226,19 +231,19 @@ Private Sub ImporterClasses()
 
 End Sub
 
-Private Sub ImporterUserForms()
+Private Sub ImporterUserForms(ByVal dossierImport As String)
 
     Dim fichier As String
     Dim nomComp As String
 
-    fichier = Dir(DOSSIER_IMPORT & "\*.frm")
+    fichier = Dir(dossierImport & "\*.frm")
 
     Do While Len(fichier) > 0
         nomComp = NomSansExtension(fichier)
 
         If Not DoitEtreIgnore(nomComp) Then
             SupprimerComposantSiExiste nomComp, TYPE_USERFORM
-            ThisWorkbook.VBProject.VBComponents.Import DOSSIER_IMPORT & "\" & fichier
+            ThisWorkbook.VBProject.VBComponents.Import dossierImport & "\" & fichier
         End If
 
         fichier = Dir
@@ -312,9 +317,7 @@ Private Sub EcrireTexteUTF8(ByVal chemin As String, ByVal contenu As String)
 
     Dim stm As Object
 
-    On Error Resume Next
-    Kill chemin
-    On Error GoTo 0
+    SupprimerFichierSiExiste chemin, "EcrireTexteUTF8"
 
     Set stm = CreateObject("ADODB.Stream")
 
@@ -374,6 +377,10 @@ Private Sub CopierFichierBinaire(ByVal cheminSource As String, ByVal cheminCible
 
     On Error Resume Next
     If fso.FileExists(cheminCible) Then fso.DeleteFile cheminCible, True
+    If Err.Number <> 0 Then
+        JournaliserIO "CopierFichierBinaire", cheminCible, Err.Number, Err.Description
+        Err.Clear
+    End If
     On Error GoTo 0
 
     fso.CopyFile cheminSource, cheminCible, True
@@ -411,8 +418,118 @@ Private Function NomSansExtension(ByVal nomFichier As String) As String
 
 End Function
 
+Private Function DossierRepo() As String
+
+    Dim dossier As String
+    dossier = Trim$(Environ$(DOSSIER_REPO_ENV))
+
+    If Len(dossier) = 0 Then dossier = ThisWorkbook.Path
+    If Len(dossier) = 0 Then dossier = CurDir$
+    DossierRepo = NormaliserCheminSansSlash(dossier)
+
+End Function
+
+Private Function DossierCodex() As String
+
+    DossierCodex = DossierRepo() & "\src"
+
+End Function
+
+Private Function DossierImport() As String
+
+    DossierImport = DossierRepo() & "\vba_import"
+
+End Function
+
+Private Function NormaliserCheminSansSlash(ByVal chemin As String) As String
+
+    Dim resultat As String
+    resultat = Replace(Trim$(chemin), "/", "\")
+
+    Do While Len(resultat) > 0 And Right$(resultat, 1) = "\"
+        resultat = Left$(resultat, Len(resultat) - 1)
+    Loop
+
+    NormaliserCheminSansSlash = resultat
+
+End Function
+
+Private Sub SupprimerFichierSiExiste(ByVal chemin As String, ByVal contexte As String)
+
+    If Len(Dir(chemin)) = 0 Then Exit Sub
+
+    On Error Resume Next
+    Kill chemin
+    If Err.Number <> 0 Then
+        JournaliserIO contexte, chemin, Err.Number, Err.Description
+        Err.Clear
+    End If
+    On Error GoTo 0
+
+End Sub
+
+Private Sub JournaliserIO(ByVal contexte As String, ByVal chemin As String, ByVal numero As Long, ByVal description As String)
+
+    Debug.Print Format$(Now, "yyyy-mm-dd hh:nn:ss") & " [zRFGitSync] " & contexte & _
+                " | " & chemin & " | Err " & CStr(numero) & " - " & description
+
+End Sub
+
 ' =============================================
-' 6. Helpers VBProject
+' 6. Self-check
+' =============================================
+Public Sub VerifierPreRequisGitSync()
+
+    Dim dossierRepo As String
+    Dim dossierCodex As String
+    Dim dossierImport As String
+    Dim message As String
+
+    dossierRepo = DossierRepo()
+    dossierCodex = DossierCodex()
+    dossierImport = DossierImport()
+
+    message = "Pré-check GitSync" & vbCrLf & vbCrLf
+
+    If ProjetVBAccessible() Then
+        message = message & "[OK] Accès VBProject" & vbCrLf
+    Else
+        message = message & "[KO] Accès VBProject" & vbCrLf
+    End If
+
+    CreerDossierSiAbsent dossierRepo
+    CreerDossierSiAbsent dossierCodex
+    CreerDossierSiAbsent dossierImport
+
+    message = message & IIf(TesterEcritureDossier(dossierRepo), "[OK]", "[KO]") & " Dossier repo: " & dossierRepo & vbCrLf
+    message = message & IIf(TesterEcritureDossier(dossierCodex), "[OK]", "[KO]") & " Dossier src: " & dossierCodex & vbCrLf
+    message = message & IIf(TesterEcritureDossier(dossierImport), "[OK]", "[KO]") & " Dossier import: " & dossierImport & vbCrLf & vbCrLf
+    message = message & "Astuce: définir la variable d'environnement " & DOSSIER_REPO_ENV & " pour forcer le dossier racine."
+
+    MsgBox message, vbInformation
+
+End Sub
+
+Private Function TesterEcritureDossier(ByVal dossier As String) As Boolean
+
+    Dim cheminTest As String
+    cheminTest = dossier & "\__zRFGitSync_write_test__.tmp"
+
+    On Error GoTo ErrHandler
+    EcrireTexteUTF8 cheminTest, "ok"
+    TesterEcritureDossier = FichierExiste(cheminTest)
+    SupprimerFichierSiExiste cheminTest, "TesterEcritureDossier"
+    Exit Function
+
+ErrHandler:
+    JournaliserIO "TesterEcritureDossier", dossier, Err.Number, Err.Description
+    Err.Clear
+    TesterEcritureDossier = False
+
+End Function
+
+' =============================================
+' 7. Helpers VBProject
 ' =============================================
 Private Function ProjetVBAccessible() As Boolean
 
@@ -457,4 +574,3 @@ Private Sub SupprimerComposantSiExiste(ByVal nomComp As String, ByVal typeAttend
     ThisWorkbook.VBProject.VBComponents.Remove vbComp
 
 End Sub
-
