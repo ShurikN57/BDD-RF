@@ -158,7 +158,7 @@ Public Sub ModeDeveloppeur_ON()
 
     Dim MDP As String
     Dim ws As Worksheet
-    Dim VBProj As Object
+    Dim vbProj As Object
 
     Dim prevScreenUpdating As Boolean
     Dim prevEnableEvents As Boolean
@@ -180,9 +180,9 @@ Public Sub ModeDeveloppeur_ON()
     DebloquerAltF11
 
     On Error Resume Next
-    Set VBProj = ThisWorkbook.VBProject
-    If Not VBProj Is Nothing Then
-        If VBProj.Protection = 1 Then
+    Set vbProj = ThisWorkbook.VBProject
+    If Not vbProj Is Nothing Then
+        If vbProj.Protection = 1 Then
             SendKeys MDP & "~"
             Application.VBE.MainWindow.Visible = True
         End If
