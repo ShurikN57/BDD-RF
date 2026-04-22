@@ -1,0 +1,387 @@
+﻿Attribute VB_Name = "ZzAuditPerf"
+Option Explicit
+
+Private Const SHEET_AUDIT As String = "AUDIT_PERF_"
+
+Public Sub AuditPerf()
+
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim wsAudit As Worksheet
+    Dim nextRow As Long
+    Dim structureProtegee As Boolean
+
+    Dim prevScreenUpdating As Boolean
+    Dim prevEnableEvents As Boolean
+    Dim prevCalculation As XlCalculation
+    Dim prevDisplayAlerts As Boolean
+
+    On Error GoTo ErrHandler
+
+    Set wb = ThisWorkbook
+
+    prevScreenUpdating = Application.ScreenUpdating
+    prevEnableEvents = Application.EnableEvents
+    prevCalculation = Application.Calculation
+    prevDisplayAlerts = Application.DisplayAlerts
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+    Application.DisplayAlerts = False
+
+    structureProtegee = False
+    On Error Resume Next
+    structureProtegee = wb.ProtectStructure
+    If structureProtegee Then wb.Unprotect Password:=MDP_DEV
+    On Error GoTo ErrHandler
+
+    SupprimerFeuilleAuditSiExiste wb
+
+    Set wsAudit = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
+    wsAudit.Name = SHEET_AUDIT
+
+    PreparerFeuilleAudit wsAudit
+    nextRow = 2
+
+    For Each ws In wb.Worksheets
+        If ws.Name <> SHEET_AUDIT Then
+            AnalyserFeuilleRapide ws, wsAudit, nextRow
+            nextRow = nextRow + 1
+        End If
+    Next ws
+
+    EcrireSyntheseClasseur wb, wsAudit, nextRow + 2
+    MettreEnFormeAudit wsAudit
+
+SortiePropre:
+    On Error Resume Next
+    If structureProtegee Then wb.Protect Password:=MDP_DEV, Structure:=True
+    Application.DisplayAlerts = prevDisplayAlerts
+    Application.Calculation = prevCalculation
+    Application.EnableEvents = prevEnableEvents
+    Application.ScreenUpdating = prevScreenUpdating
+    On Error GoTo 0
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Erreur lors de l'audit rapide : " & Err.description, vbExclamation
+    Resume SortiePropre
+
+End Sub
+
+Private Sub AnalyserFeuilleRapide(ByVal ws As Worksheet, ByVal wsAudit As Worksheet, ByVal outRow As Long)
+
+    Dim ur As Range
+    Dim nbRows As Long
+    Dim nbCols As Long
+    Dim nbCells As Double
+    Dim usedAddr As String
+
+    Dim nbFormules As Double
+    Dim nbHyperlinks As Long
+    Dim nbShapes As Long
+    Dim nbOLE As Long
+    Dim nbComments As Long
+    Dim nbTables As Long
+    Dim nbPivot As Long
+    Dim nbNamesLocal As Long
+    Dim nbMFC_Areas As Long
+    Dim nbValidationAreas As Long
+    Dim score As Long
+    Dim diagnostic As String
+
+    Set ur = SafeUsedRange(ws)
+
+    If ur Is Nothing Then
+        usedAddr = ""
+        nbRows = 0
+        nbCols = 0
+        nbCells = 0
+    Else
+        usedAddr = ur.Address(False, False)
+        nbRows = ur.Rows.Count
+        nbCols = ur.Columns.Count
+        nbCells = CDbl(nbRows) * CDbl(nbCols)
+    End If
+
+    nbFormules = CountFormulasFast(ws)
+    nbHyperlinks = ws.Hyperlinks.Count
+    nbShapes = ws.Shapes.Count
+    nbOLE = CountOLESafe(ws)
+    nbComments = CountCommentsFast(ws)
+    nbTables = ws.ListObjects.Count
+    nbPivot = ws.PivotTables.Count
+    nbNamesLocal = ws.Names.Count
+    nbMFC_Areas = CountFormatConditionAreasFast(ws)
+    nbValidationAreas = CountValidationAreasFast(ws)
+
+    score = EvaluerScoreRapide(nbCells, nbFormules, nbShapes, nbHyperlinks, nbOLE, nbComments, nbTables, nbPivot, nbMFC_Areas, nbValidationAreas)
+    diagnostic = DiagnosticRapide(nbCells, nbFormules, nbShapes, nbHyperlinks, nbOLE, nbComments, nbTables, nbPivot, nbMFC_Areas, nbValidationAreas)
+
+    wsAudit.Cells(outRow, 1).Value = ws.Name
+    wsAudit.Cells(outRow, 2).Value = usedAddr
+    wsAudit.Cells(outRow, 3).Value = nbRows
+    wsAudit.Cells(outRow, 4).Value = nbCols
+    wsAudit.Cells(outRow, 5).Value = nbCells
+    wsAudit.Cells(outRow, 6).Value = nbFormules
+    wsAudit.Cells(outRow, 7).Value = nbMFC_Areas
+    wsAudit.Cells(outRow, 8).Value = nbValidationAreas
+    wsAudit.Cells(outRow, 9).Value = nbShapes
+    wsAudit.Cells(outRow, 10).Value = nbHyperlinks
+    wsAudit.Cells(outRow, 11).Value = nbOLE
+    wsAudit.Cells(outRow, 12).Value = nbComments
+    wsAudit.Cells(outRow, 13).Value = nbTables
+    wsAudit.Cells(outRow, 14).Value = nbPivot
+    wsAudit.Cells(outRow, 15).Value = nbNamesLocal
+    wsAudit.Cells(outRow, 16).Value = score
+    wsAudit.Cells(outRow, 17).Value = diagnostic
+
+End Sub
+
+Private Sub PreparerFeuilleAudit(ByVal wsAudit As Worksheet)
+
+    wsAudit.Cells(1, 1).Value = "Feuille"
+    wsAudit.Cells(1, 2).Value = "UsedRange"
+    wsAudit.Cells(1, 3).Value = "Nb lignes"
+    wsAudit.Cells(1, 4).Value = "Nb colonnes"
+    wsAudit.Cells(1, 5).Value = "Nb cellules"
+    wsAudit.Cells(1, 6).Value = "Nb formules"
+    wsAudit.Cells(1, 7).Value = "Nb zones MFC"
+    wsAudit.Cells(1, 8).Value = "Nb zones validations"
+    wsAudit.Cells(1, 9).Value = "Nb formes"
+    wsAudit.Cells(1, 10).Value = "Nb hyperliens"
+    wsAudit.Cells(1, 11).Value = "Nb OLE/contrôles"
+    wsAudit.Cells(1, 12).Value = "Nb commentaires"
+    wsAudit.Cells(1, 13).Value = "Nb tableaux"
+    wsAudit.Cells(1, 14).Value = "Nb TCD"
+    wsAudit.Cells(1, 15).Value = "Nb noms locaux"
+    wsAudit.Cells(1, 16).Value = "Score risque"
+    wsAudit.Cells(1, 17).Value = "Diagnostic"
+
+End Sub
+
+Private Sub SupprimerFeuilleAuditSiExiste(ByVal wb As Workbook)
+
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = wb.Worksheets(SHEET_AUDIT)
+    On Error GoTo 0
+
+    If Not ws Is Nothing Then ws.Delete
+
+End Sub
+
+Private Function SafeUsedRange(ByVal ws As Worksheet) As Range
+    On Error Resume Next
+    Set SafeUsedRange = ws.UsedRange
+    On Error GoTo 0
+End Function
+
+Private Function CountFormulasFast(ByVal ws As Worksheet) As Double
+
+    Dim rng As Range
+
+    On Error Resume Next
+    Set rng = ws.UsedRange.SpecialCells(xlCellTypeFormulas)
+    On Error GoTo 0
+
+    If rng Is Nothing Then
+        CountFormulasFast = 0
+    Else
+        CountFormulasFast = rng.CountLarge
+    End If
+
+End Function
+
+Private Function CountValidationAreasFast(ByVal ws As Worksheet) As Long
+
+    Dim rng As Range
+
+    On Error Resume Next
+    Set rng = ws.Cells.SpecialCells(xlCellTypeAllValidation)
+    On Error GoTo 0
+
+    If rng Is Nothing Then
+        CountValidationAreasFast = 0
+    Else
+        CountValidationAreasFast = rng.Areas.Count
+    End If
+
+End Function
+
+Private Function CountCommentsFast(ByVal ws As Worksheet) As Long
+
+    Dim n As Long
+
+    On Error Resume Next
+    n = ws.Comments.Count
+    If Err.Number <> 0 Then
+        Err.Clear
+        n = 0
+    End If
+    On Error GoTo 0
+
+    CountCommentsFast = n
+
+End Function
+
+Private Function CountOLESafe(ByVal ws As Worksheet) As Long
+
+    On Error Resume Next
+    CountOLESafe = ws.OLEObjects.Count
+    If Err.Number <> 0 Then
+        Err.Clear
+        CountOLESafe = 0
+    End If
+    On Error GoTo 0
+
+End Function
+
+Private Function CountFormatConditionAreasFast(ByVal ws As Worksheet) As Long
+
+    Dim fc As FormatCondition
+    Dim total As Long
+
+    On Error GoTo Fin
+
+    For Each fc In ws.Cells.FormatConditions
+        total = total + 1
+    Next fc
+
+Fin:
+    CountFormatConditionAreasFast = total
+
+End Function
+
+Private Function EvaluerScoreRapide(ByVal nbCells As Double, _
+                                    ByVal nbFormules As Double, _
+                                    ByVal nbShapes As Long, _
+                                    ByVal nbHyperlinks As Long, _
+                                    ByVal nbOLE As Long, _
+                                    ByVal nbComments As Long, _
+                                    ByVal nbTables As Long, _
+                                    ByVal nbPivot As Long, _
+                                    ByVal nbMFC_Areas As Long, _
+                                    ByVal nbValidationAreas As Long) As Long
+
+    Dim score As Long
+
+    If nbCells > 100000 Then score = score + 2
+    If nbCells > 500000 Then score = score + 3
+    If nbCells > 2000000 Then score = score + 4
+
+    If nbFormules > 1000 Then score = score + 2
+    If nbFormules > 10000 Then score = score + 3
+
+    If nbMFC_Areas > 20 Then score = score + 2
+    If nbMFC_Areas > 100 Then score = score + 3
+
+    If nbValidationAreas > 20 Then score = score + 1
+    If nbValidationAreas > 100 Then score = score + 2
+
+    If nbShapes > 20 Then score = score + 1
+    If nbShapes > 100 Then score = score + 2
+
+    If nbHyperlinks > 500 Then score = score + 1
+    If nbOLE > 0 Then score = score + 2
+    If nbComments > 100 Then score = score + 1
+    If nbTables > 5 Then score = score + 1
+    If nbPivot > 0 Then score = score + 1
+
+    EvaluerScoreRapide = score
+
+End Function
+
+Private Function DiagnosticRapide(ByVal nbCells As Double, _
+                                  ByVal nbFormules As Double, _
+                                  ByVal nbShapes As Long, _
+                                  ByVal nbHyperlinks As Long, _
+                                  ByVal nbOLE As Long, _
+                                  ByVal nbComments As Long, _
+                                  ByVal nbTables As Long, _
+                                  ByVal nbPivot As Long, _
+                                  ByVal nbMFC_Areas As Long, _
+                                  ByVal nbValidationAreas As Long) As String
+
+    Dim msg As String
+
+    If nbCells > 500000 Then msg = msg & "UsedRange large; "
+    If nbCells > 2000000 Then msg = msg & "UsedRange très large; "
+    If nbFormules > 10000 Then msg = msg & "beaucoup de formules; "
+    If nbMFC_Areas > 20 Then msg = msg & "plusieurs MFC; "
+    If nbValidationAreas > 20 Then msg = msg & "plusieurs validations; "
+    If nbShapes > 100 Then msg = msg & "beaucoup de formes; "
+    If nbHyperlinks > 1000 Then msg = msg & "beaucoup d'hyperliens; "
+    If nbOLE > 0 Then msg = msg & "objets OLE présents; "
+    If nbComments > 100 Then msg = msg & "beaucoup de commentaires; "
+    If nbTables > 5 Then msg = msg & "plusieurs tableaux; "
+    If nbPivot > 0 Then msg = msg & "TCD présents; "
+
+    If msg = "" Then
+        DiagnosticRapide = "RAS majeur"
+    Else
+        DiagnosticRapide = Left$(msg, Len(msg) - 2)
+    End If
+
+End Function
+
+Private Sub EcrireSyntheseClasseur(ByVal wb As Workbook, ByVal wsAudit As Worksheet, ByVal startRow As Long)
+
+    Dim nbNoms As Long
+    Dim nbLiensExternes As Long
+
+    On Error Resume Next
+    nbNoms = wb.Names.Count
+    On Error GoTo 0
+
+    nbLiensExternes = CompterLiensExternes(wb)
+
+    wsAudit.Cells(startRow, 1).Value = "SYNTHESE CLASSEUR"
+    wsAudit.Cells(startRow, 1).Font.Bold = True
+
+    wsAudit.Cells(startRow + 1, 1).Value = "Nb feuilles analysées"
+    wsAudit.Cells(startRow + 1, 2).Value = wb.Worksheets.Count - 1
+
+    wsAudit.Cells(startRow + 2, 1).Value = "Nb noms définis classeur"
+    wsAudit.Cells(startRow + 2, 2).Value = nbNoms
+
+    wsAudit.Cells(startRow + 3, 1).Value = "Nb liens externes"
+    wsAudit.Cells(startRow + 3, 2).Value = nbLiensExternes
+
+End Sub
+
+Private Function CompterLiensExternes(ByVal wb As Workbook) As Long
+
+    Dim arr As Variant
+
+    On Error Resume Next
+    arr = wb.LinkSources(xlExcelLinks)
+    On Error GoTo 0
+
+    If IsEmpty(arr) Then
+        CompterLiensExternes = 0
+    Else
+        CompterLiensExternes = UBound(arr) - LBound(arr) + 1
+    End If
+
+End Function
+
+Private Sub MettreEnFormeAudit(ByVal wsAudit As Worksheet)
+
+    Dim lastRow As Long
+
+    lastRow = wsAudit.Cells(wsAudit.Rows.Count, 1).End(xlUp).Row
+    If lastRow < 1 Then Exit Sub
+
+    With wsAudit.Rows(1)
+        .Font.Bold = True
+        .Interior.Color = RGB(220, 230, 241)
+    End With
+
+    wsAudit.Columns("A:Q").AutoFit
+    wsAudit.Activate
+    wsAudit.Range("A1").Select
+
+End Sub
