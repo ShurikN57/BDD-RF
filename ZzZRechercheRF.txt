@@ -1,4 +1,5 @@
 Attribute VB_Name = "ZzZRechercheRF"
+Option Explicit
 ' =============================================
 ' RechercheRF (utile pour reconstruire AF seulement)
 ' =============================================
@@ -8,16 +9,35 @@ Public Sub RebuildCleAF()
     Dim arrIn As Variant
     Dim arrOut As Variant
     Dim i As Long
+    Dim prevScreenUpdating As Boolean
+    Dim prevEnableEvents As Boolean
+    Dim prevCalculation As XlCalculation
+    Dim succes As Boolean
 
-    Set ws = ThisWorkbook.Worksheets("GMC")
+    On Error GoTo ErrHandler
+
+    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
 
     If lastRow < 8 Then
-        MsgBox "Aucune donnée à reconstruire.", vbInformation
-        Exit Sub
-    End If
+    prevScreenUpdating = Application.ScreenUpdating
+    prevEnableEvents = Application.EnableEvents
+    prevCalculation = Application.Calculation
 
-    Application.ScreenUpdating = False
+    succes = True
+SortiePropre:
+    Application.Calculation = prevCalculation
+    Application.EnableEvents = prevEnableEvents
+    Application.ScreenUpdating = prevScreenUpdating
+
+    If succes Then
+        MsgBox "Colonne AE reconstruite (" & UBound(arrOut, 1) & " lignes).", vbInformation
+    End If
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Erreur lors de la reconstruction de la cl AF : " & Err.Description, vbExclamation
+    Resume SortiePropre
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
 
@@ -35,7 +55,7 @@ Public Sub RebuildCleAF()
                        CStr(arrIn(i, 6))
     Next i
 
-    ' 1 seule écriture matricielle AE
+    ' 1 seule Ã©criture matricielle AE
     ws.Range("AE8").Resize(UBound(arrOut, 1), 1).Value = arrOut
 
     Application.Calculation = xlCalculationAutomatic
