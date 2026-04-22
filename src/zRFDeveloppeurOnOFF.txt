@@ -1,0 +1,310 @@
+﻿Attribute VB_Name = "zRFDeveloppeurOnOFF"
+Option Explicit
+
+' =============================================
+'            Mode DeveloppeurONOFF
+' =============================================
+
+Public ModeDeveloppeurActif As Boolean
+
+' =============================================
+' OUTILS
+' =============================================
+Private Function ConstruirePlageEditable(ByVal ws As Worksheet, ByVal lastRow As Long) As Range
+
+    Dim rng As Range
+    Dim rngTemp As Range
+
+    If PLAGE_RECHERCHE <> "" Then
+        Set rng = ws.Range(PLAGE_RECHERCHE)
+    End If
+
+    If PLAGE_EDITABLE_MAIN <> "" Then
+        Set rngTemp = Intersect(ws.Range(PLAGE_EDITABLE_MAIN), ws.Rows(ROW_START & ":" & lastRow))
+        If Not rngTemp Is Nothing Then
+            If rng Is Nothing Then
+                Set rng = rngTemp
+            Else
+                Set rng = Union(rng, rngTemp)
+            End If
+        End If
+    End If
+
+    If PLAGE_EDITABLE_SUIVI <> "" Then
+        Set rngTemp = Intersect(ws.Range(PLAGE_EDITABLE_SUIVI), ws.Rows(ROW_START & ":" & lastRow))
+        If Not rngTemp Is Nothing Then
+            If rng Is Nothing Then
+                Set rng = rngTemp
+            Else
+                Set rng = Union(rng, rngTemp)
+            End If
+        End If
+    End If
+
+    If PLAGE_EDITABLE_AIDE <> "" Then
+        Set rngTemp = Intersect(ws.Range(PLAGE_EDITABLE_AIDE), ws.Rows(ROW_START & ":" & lastRow))
+        If Not rngTemp Is Nothing Then
+            If rng Is Nothing Then
+                Set rng = rngTemp
+            Else
+                Set rng = Union(rng, rngTemp)
+            End If
+        End If
+    End If
+
+    Set ConstruirePlageEditable = rng
+
+End Function
+
+Private Sub AppliquerValidationListeSurPlage(ByVal rng As Range, ByVal wsSource As Worksheet, ByVal plageSource As String, _
+                                             ByVal messageErreur As String, Optional ByVal inputTitre As String = "", _
+                                             Optional ByVal inputMessage As String = "")
+
+    Dim formuleListe As String
+
+    If rng Is Nothing Then Exit Sub
+    If wsSource Is Nothing Then Exit Sub
+    If plageSource = "" Then Exit Sub
+
+    formuleListe = "='" & wsSource.Name & "'!" & wsSource.Range(plageSource).Address
+
+    With rng.Validation
+        .Delete
+        .Add Type:=xlValidateList, _
+             AlertStyle:=xlValidAlertStop, _
+             Formula1:=formuleListe
+        .IgnoreBlank = True
+        .InCellDropdown = True
+
+        .ShowError = True
+        .ErrorTitle = "Valeur non autorisée"
+        .ErrorMessage = messageErreur
+
+        If inputMessage <> "" Then
+            .InputTitle = inputTitre
+            .inputMessage = inputMessage
+            .ShowInput = True
+        Else
+            .ShowInput = False
+        End If
+    End With
+
+End Sub
+
+Private Sub AppliquerValidationsListesRF()
+
+    Dim ws As Worksheet
+    Dim wsListes As Worksheet
+    Dim wsMenu As Worksheet
+    Dim lastRow As Long
+
+    On Error GoTo ErrHandler
+
+    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
+    Set wsListes = ThisWorkbook.Worksheets(SHEET_LISTES_RF)
+    Set wsMenu = ThisWorkbook.Worksheets(SHEET_MENU_DEROULANT)
+    lastRow = DerniereLigneUtileMain()
+
+    ws.Unprotect Password:=MDP_DEV
+
+    ' Tranche A / N
+    AppliquerValidationListeSurPlage ws.Range(COL_TRANCHE_MAIN & ROW_START & ":" & COL_TRANCHE_MAIN & lastRow), wsListes, PLAGE_LISTE_TRANCHE, MSG_VALEURS_TRANCHE
+    AppliquerValidationListeSurPlage ws.Range(COL_TRANCHE_ASSOC & ROW_START & ":" & COL_TRANCHE_ASSOC & lastRow), wsListes, PLAGE_LISTE_TRANCHE, MSG_VALEURS_TRANCHE
+
+    ' Qualité I / V
+    AppliquerValidationListeSurPlage ws.Range(COL_QUALITE_MAIN & ROW_START & ":" & COL_QUALITE_MAIN & lastRow), wsListes, PLAGE_LISTE_QUALITE, MSG_VALEURS_QUALITE, "Information", "NQS = Non QS" & vbCrLf & "QS = QS" & vbCrLf & "IPS = IPS" & vbCrLf & "NC = Non concerné"
+    AppliquerValidationListeSurPlage ws.Range(COL_QUALITE_ASSOC & ROW_START & ":" & COL_QUALITE_ASSOC & lastRow), wsListes, PLAGE_LISTE_QUALITE, MSG_VALEURS_QUALITE, "Information", "NQS = Non QS" & vbCrLf & "QS = QS" & vbCrLf & "IPS = IPS" & vbCrLf & "NC = Non concerné"
+
+    ' Pose L / Y
+    AppliquerValidationListeSurPlage ws.Range(COL_CONTROLE_MAIN & ROW_START & ":" & COL_CONTROLE_MAIN & lastRow), wsListes, PLAGE_LISTE_POSE, MSG_VALEURS_POSE, "Information", "O = Oui" & vbCrLf & "N = Non"
+    AppliquerValidationListeSurPlage ws.Range(COL_CONTROLE_ASSOC & ROW_START & ":" & COL_CONTROLE_ASSOC & lastRow), wsListes, PLAGE_LISTE_POSE, MSG_VALEURS_POSE, "Information", "O = Oui" & vbCrLf & "N = Non"
+
+    ' Situation M / Z
+    AppliquerValidationListeSurPlage ws.Range(COL_SITUATION_MAIN & ROW_START & ":" & COL_SITUATION_MAIN & lastRow), wsListes, PLAGE_LISTE_SITUATION, MSG_VALEURS_SITUATION, "Information", "EX = Exploitation" & vbCrLf & "HX = Hors Exploitation" & vbCrLf & "NC = Non Condamnable"
+    AppliquerValidationListeSurPlage ws.Range(COL_SITUATION_ASSOC & ROW_START & ":" & COL_SITUATION_ASSOC & lastRow), wsListes, PLAGE_LISTE_SITUATION, MSG_VALEURS_SITUATION, "Information", "EX = Exploitation" & vbCrLf & "HX = Hors Exploitation" & vbCrLf & "NC = Non Condamnable"
+
+    ' Conformité AC
+    AppliquerValidationListeSurPlage ws.Range(COL_CONF & ROW_START & ":" & COL_CONF & lastRow), wsMenu, "A1:A3", MSG_VALEURS_CONF
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Erreur lors de l'application des validations RF : " & Err.Description, vbExclamation
+
+End Sub
+
+' =============================================
+' BLOCAGE / DEBLOCAGE ALT+F11
+' =============================================
+Public Sub BloquerAltF11()
+    Application.OnKey "%{F11}", "AccesFerme"
+End Sub
+
+Public Sub DebloquerAltF11()
+    Application.OnKey "%{F11}"
+End Sub
+
+Public Sub AccesFerme()
+    MsgBox "Accès non autorisé.", vbCritical
+End Sub
+
+Public Sub OuvrirEditeurVBA()
+    Application.VBE.MainWindow.Visible = True
+End Sub
+
+' =============================================
+' MODE DEVELOPPEUR ON
+' =============================================
+Public Sub ModeDeveloppeur_ON()
+
+    Dim MDP As String
+    Dim ws As Worksheet
+    Dim VBProj As Object
+
+    Dim prevScreenUpdating As Boolean
+    Dim prevEnableEvents As Boolean
+    Dim prevCalculation As XlCalculation
+
+    MDP = InputBox("Mot de passe développeur :", "Mode développeur")
+
+    If MDP <> MDP_DEV Then
+        MsgBox "Mot de passe incorrect.", vbCritical
+        Exit Sub
+    End If
+
+    On Error GoTo ErrHandler
+
+    prevScreenUpdating = Application.ScreenUpdating
+    prevEnableEvents = Application.EnableEvents
+    prevCalculation = Application.Calculation
+
+    DebloquerAltF11
+
+    On Error Resume Next
+    Set VBProj = ThisWorkbook.VBProject
+    If Not VBProj Is Nothing Then
+        If VBProj.Protection = 1 Then
+            SendKeys MDP & "~"
+            Application.VBE.MainWindow.Visible = True
+        End If
+    End If
+    On Error GoTo ErrHandler
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+
+    Application.DisplayFormulaBar = True
+    ActiveWindow.DisplayWorkbookTabs = True
+    ActiveWindow.DisplayHeadings = True
+    Application.ExecuteExcel4Macro "SHOW.TOOLBAR(""Ribbon"",True)"
+
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        ws.Unprotect Password:=MDP_DEV
+        ws.EnableSelection = xlNoRestrictions
+        On Error GoTo ErrHandler
+    Next ws
+
+    On Error Resume Next
+    ThisWorkbook.Unprotect Password:=MDP_DEV
+    On Error GoTo ErrHandler
+
+    AppliquerValidationsListesRF
+
+    ModeDeveloppeurActif = True
+    ThisWorkbook.Worksheets(SHEET_MAIN).Activate
+
+    MsgBox "Mode développeur ACTIVÉ." & vbCrLf & _
+           "- Feuilles déprotégées" & vbCrLf & _
+           "- Structure du classeur déprotégée", vbInformation
+
+SortiePropre:
+    Application.Calculation = prevCalculation
+    Application.EnableEvents = prevEnableEvents
+    Application.ScreenUpdating = prevScreenUpdating
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Erreur lors de l'activation du mode développeur : " & Err.Description, vbExclamation
+    Resume SortiePropre
+
+End Sub
+
+' =============================================
+' MODE DEVELOPPEUR OFF
+' =============================================
+Public Sub ModeDeveloppeur_OFF(Optional ByVal Silencieux As Boolean = False)
+
+    Dim ws As Worksheet
+    Dim wsMain As Worksheet
+    Dim lastRow As Long
+    Dim rngEditable As Range
+
+    Dim prevScreenUpdating As Boolean
+    Dim prevEnableEvents As Boolean
+    Dim prevCalculation As XlCalculation
+
+    On Error GoTo ErrHandler
+
+    prevScreenUpdating = Application.ScreenUpdating
+    prevEnableEvents = Application.EnableEvents
+    prevCalculation = Application.Calculation
+
+    BloquerAltF11
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+
+    ModeDeveloppeurActif = False
+    lastRow = DerniereLigneUtileMain()
+    Set wsMain = ThisWorkbook.Worksheets(SHEET_MAIN)
+
+    Application.DisplayFormulaBar = False
+    ActiveWindow.DisplayWorkbookTabs = False
+    ActiveWindow.DisplayHeadings = True
+    Application.ExecuteExcel4Macro "SHOW.TOOLBAR(""Ribbon"",False)"
+
+    With wsMain
+        .Unprotect Password:=MDP_DEV
+        .Cells.Locked = True
+
+        Set rngEditable = ConstruirePlageEditable(wsMain, lastRow)
+        If Not rngEditable Is Nothing Then
+            rngEditable.Locked = False
+        End If
+    End With
+
+    AppliquerValidationsListesRF
+    GMC.RechargerReferentielsRF
+
+    For Each ws In ThisWorkbook.Worksheets
+        ws.Protect Password:=MDP_DEV, UserInterfaceOnly:=True, _
+                   AllowFiltering:=True, AllowSorting:=True
+        ws.EnableSelection = xlNoRestrictions
+    Next ws
+
+    ThisWorkbook.Protect Password:=MDP_DEV, Structure:=True
+    ThisWorkbook.Worksheets(SHEET_MAIN).Activate
+
+    If Not Silencieux Then
+        MsgBox "Mode développeur DÉSACTIVÉ." & vbCrLf & _
+               "- Feuilles protégées" & vbCrLf & _
+               "- Structure du classeur protégée", vbInformation
+    End If
+
+SortiePropre:
+    Application.Calculation = prevCalculation
+    Application.EnableEvents = prevEnableEvents
+    Application.ScreenUpdating = prevScreenUpdating
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Erreur lors de la désactivation du mode développeur : " & Err.Description, vbExclamation
+    Resume SortiePropre
+
+End Sub
+
+Public Sub ModeDeveloppeur_OFF_Bouton()
+    ModeDeveloppeur_OFF False
+End Sub

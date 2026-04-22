@@ -1,0 +1,1762 @@
+﻿Attribute VB_Name = "GMC"
+Option Explicit
+
+' =============================================
+' 0. VARIABLES FEUILLE (UNIQUEMENT)
+' =============================================
+Private AncienneCelluleRecherche As Range
+
+Public Enum ValidationType
+    Val_ANY = 0
+    Val_NUMERIC = 1
+    Val_ALPHANUM = 2
+    Val_LIST = 3
+End Enum
+
+Private Type ColumnRule
+    Name As String
+    VType As ValidationType
+    IsMandatoryMain As Boolean
+    IsMandatoryAssoc As Boolean
+    MinLen As Integer
+    MaxLen As Integer
+    AllowedDict As Object
+    AllowedValues As String
+    Hint As String
+    ForceUpperCase As Boolean
+    forbiddenChars As String
+    ForbiddenPattern As String
+    erreurHorsPlage As String
+End Type
+
+Private Rules(1 To NB_COL_TABLE) As ColumnRule
+Private RulesLoaded As Boolean
+
+' ===== Cache valeur E2 pour UpdateDynamicRules =====
+Private m_CachedE2 As Variant
+Private m_E2Loaded As Boolean
+
+' ===== Sauvegarde état Excel =====
+Private m_PrevScreenUpdating As Boolean
+Private m_PrevEnableEvents As Boolean
+Private m_PrevDisplayStatusBar As Boolean
+Private m_PrevCalculation As XlCalculation
+Private m_AppStateSaved As Boolean
+
+' ===== LOCAL/CARROYAGE =====
+Private mDictLocaux As Object
+Private mDictCarroyages As Object
+Private mReferentielsCharges As Boolean
+
+' ===== Cache numéros de colonnes référentiels =====
+Private m_ColLocalMain As Long
+Private m_ColLocalAssoc As Long
+Private m_ColCarroyageMain As Long
+Private m_ColCarroyageAssoc As Long
+Private m_ColsRefLoaded As Boolean
+
+' =============================================
+' 0.1 DerniereLigneUtile
+' =============================================
+Private Function DerniereLigneUtile() As Long
+
+    Dim lastRow As Long
+
+    lastRow = Me.Cells(Me.Rows.Count, COL_FIRST).End(xlUp).Row
+    If lastRow < ROW_START Then lastRow = ROW_START
+
+    DerniereLigneUtile = lastRow
+
+End Function
+
+' =============================================
+' 1. SelectionChange
+' =============================================
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+
+    On Error GoTo SortiePropre
+
+    Dim bCopieEnCours As Boolean
+    Dim zoneUndo As Range
+    Dim cibleUndo As Range
+    Static AncienneSelectionBordure As Range
+    Dim rngSelectionCourante As Range
+    Dim lastDataRow As Long
+
+    bCopieEnCours = (Application.CutCopyMode <> 0)
+    lastDataRow = DerniereLigneUtile()
+
+    Set zoneUndo = Union( _
+        Me.Range(PLAGE_RECHERCHE), _
+        Me.Range(COL_LIBELLE_MAIN & ROW_START & ":" & COL_RF_CONCAT & lastDataRow), _
+        Me.Range(COL_CONF & ROW_START & ":" & COL_OBS & lastDataRow) _
+    )
+
+    Set cibleUndo = Intersect(Target, zoneUndo)
+    If Not cibleUndo Is Nothing Then
+        If Not CollageValeursEnCours Then
+            SauvegarderEtatCandidat cibleUndo
+        End If
+    End If
+
+    If Not bCopieEnCours Then
+        If Not AncienneCelluleRecherche Is Nothing Then
+            RestaurerPlaceholder AncienneCelluleRecherche
+            If AncienneCelluleRecherche.Row = ROW_RECHERCHE Then
+                AncienneCelluleRecherche.Interior.Color = COLOR_RECHERCHE_FOND
+            End If
+        End If
+
+        GererPlaceholderSelection Target
+        MajStyleBarreRecherche Target.Cells(1, 1)
+
+        If Not Intersect(Target.Cells(1, 1), Me.Range(PLAGE_RECHERCHE)) Is Nothing Then
+            Set AncienneCelluleRecherche = Target.Cells(1, 1)
+        Else
+            Set AncienneCelluleRecherche = Nothing
+        End If
+    End If
+
+    ' Important :
+    ' pendant un copier, on ne touche pas aux bordures
+    ' sinon Excel peut perdre le mode copie
+    If bCopieEnCours Then GoTo SortiePropre
+
+    If ActiveCell.Row < ROW_START Or ActiveCell.Row > lastDataRow Then
+        If Not AncienneSelectionBordure Is Nothing Then
+            Application.ScreenUpdating = False
+
+            With AncienneSelectionBordure
+                With .Borders(xlEdgeTop)
+                    .LineStyle = xlContinuous
+                    .Weight = xlThin
+                    .Color = COLOR_BORDURE_BLEUE
+                End With
+                With .Borders(xlEdgeBottom)
+                    .LineStyle = xlContinuous
+                    .Weight = xlThin
+                    .Color = COLOR_BORDURE_BLEUE
+                End With
+            End With
+
+            Set AncienneSelectionBordure = Nothing
+            Application.ScreenUpdating = True
+        End If
+        GoTo SortiePropre
+    End If
+
+    Set rngSelectionCourante = Me.Range(Me.Cells(ActiveCell.Row, 1), Me.Cells(ActiveCell.Row, NB_COL_UI))
+
+    If Not AncienneSelectionBordure Is Nothing Then
+        If rngSelectionCourante.Address = AncienneSelectionBordure.Address Then GoTo SortiePropre
+    End If
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    If Not AncienneSelectionBordure Is Nothing Then
+        With AncienneSelectionBordure
+            With .Borders(xlEdgeTop)
+                .LineStyle = xlContinuous
+                .Weight = xlThin
+                .Color = COLOR_BORDURE_BLEUE
+            End With
+            With .Borders(xlEdgeBottom)
+                .LineStyle = xlContinuous
+                .Weight = xlThin
+                .Color = COLOR_BORDURE_BLEUE
+            End With
+        End With
+    End If
+
+    With rngSelectionCourante
+        With .Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+            .Color = COLOR_BORDURE_VIOLETTE
+        End With
+        With .Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+            .Color = COLOR_BORDURE_VIOLETTE
+        End With
+    End With
+
+    Set AncienneSelectionBordure = rngSelectionCourante
+
+SortiePropre:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+
+End Sub
+
+' =============================================
+' 2. Change
+' =============================================
+Private Sub Worksheet_Change(ByVal Target As Range)
+
+    Static isProcessing As Boolean
+    Dim rngIntersect As Range
+    Dim zoneMaj As Range, cellMaj As Range
+    Dim colRelative As Long
+    Dim nbLignes As Long
+    Dim reponse As VbMsgBoxResult
+
+    On Error GoTo ErrorHandler
+
+    If isProcessing Then Exit Sub
+
+    If Not Intersect(Target, Me.Range(COL_COMP1_MAIN & "2")) Is Nothing Then
+        m_E2Loaded = False
+    End If
+
+    If Not CollageValeursEnCours Then
+        If Not Intersect(Target, Union(Me.Range(PLAGE_RECHERCHE), Me.Range(COL_LIBELLE_MAIN & ":" & COL_RF_CONCAT), Me.Range(COL_CONF & ":" & COL_OBS))) Is Nothing Then
+            ValiderEtatCandidatCommeUndo
+        End If
+    End If
+
+    If ModeDeveloppeurActif Then Exit Sub
+
+    HandleSuiviAgent Target
+
+    Set rngIntersect = Intersect(Target, Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Rows.Count))
+    If rngIntersect Is Nothing Then Exit Sub
+
+    isProcessing = True
+    SetApplicationVariables False
+
+    If Not RulesLoaded Then InitRules
+    UpdateDynamicRules
+
+    Set zoneMaj = Intersect(rngIntersect, Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Rows.Count))
+
+    If Not zoneMaj Is Nothing Then
+        For Each cellMaj In zoneMaj.Cells
+            If Not IsError(cellMaj.Value) Then
+                If cellMaj.Value <> "" Then
+                    colRelative = cellMaj.Column
+                    If colRelative >= 1 And colRelative <= NB_COL_TABLE Then
+                        If Rules(colRelative).ForceUpperCase Then
+                            If CStr(cellMaj.Value) <> UCase$(CStr(cellMaj.Value)) Then
+                                cellMaj.Value = UCase$(CStr(cellMaj.Value))
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next cellMaj
+    End If
+
+    If BloquerValeursListeNonAutorisees(rngIntersect) Then GoTo SortiePropre
+    If BloquerValeursReferentielNonAutorisees(rngIntersect) Then GoTo SortiePropre
+
+    nbLignes = rngIntersect.Rows.CountLarge
+
+    If nbLignes > 1 Then
+        If Application.WorksheetFunction.CountA(Target) <> 0 Then
+            If nbLignes > SEUIL_BLOCAGE_MASSE Then
+                MsgBox "Vous voulez insérer un nombre de lignes trop volumineux (> " & SEUIL_BLOCAGE_MASSE & " lignes)" & vbCrLf & vbCrLf & _
+                       "Nous vous invitons à séquencer cette opération", vbOKOnly + vbCritical, "Opération annulée"
+                GoTo CancelAndExit
+            End If
+
+            If nbLignes >= SEUIL_CONFIRMATION_MASSE Then
+                reponse = MsgBox("Vous êtes sur le point d'insérer un nombre volumineux de lignes" & vbCrLf & _
+                                 "Cette insertion peut prendre un certain temps" & vbCrLf & vbCrLf & _
+                                 "Voulez-vous lancer le traitement ?", vbYesNo + vbExclamation, "Confirmation de traitement massif")
+                If reponse = vbNo Then GoTo CancelAndExit
+            End If
+        End If
+    End If
+
+    ProcessValidationAreas rngIntersect
+
+    If ZoneValidationInvalide(rngIntersect) Then
+        If DoitAfficherMessageDetaille(rngIntersect) Then
+            MsgBox ConstruireMessageErreurDetaillee(rngIntersect.Cells(1, 1)), vbExclamation
+        Else
+            MsgBox "Certaines cellules ne respectent pas les règles de saisie." & vbCrLf & vbCrLf & _
+                   "Caractères interdits (; , @ &)" & vbCrLf & _
+                   "Nombre de caractères autorisé (voir ligne 6).", vbExclamation
+        End If
+    End If
+
+SortiePropre:
+    SetApplicationVariables True
+    isProcessing = False
+    Exit Sub
+
+CancelAndExit:
+    AnnulerDerniereAction
+    GoTo SortiePropre
+
+ErrorHandler:
+    SetApplicationVariables True
+    isProcessing = False
+    If Err.Number <> 0 Then MsgBox "Erreur Runtime : " & Err.Description, vbExclamation
+    Exit Sub
+
+End Sub
+
+' =============================================
+' 3. RafraichirCouleursConformiteSurLignes
+' =============================================
+Public Sub RafraichirCouleursConformiteSurLignes(ByVal adresseLignes As String)
+
+    Dim lastRow As Long
+    Dim rngRows As Range
+    Dim area As Range
+    Dim arrConf As Variant
+    Dim prevCalc As XlCalculation
+    Dim i As Long
+    Dim ligCourante As Long
+    Dim ligDeb As Long
+    Dim etatCourant As Long
+    Dim etatLigne As Long
+    Dim ligFin As Long
+
+    On Error GoTo Fin
+
+    If adresseLignes = "" Then Exit Sub
+
+    lastRow = DerniereLigneUtile()
+    If lastRow < ROW_START Then Exit Sub
+
+    Set rngRows = Intersect(Me.Range(adresseLignes), Me.Rows(CStr(ROW_START) & ":" & CStr(lastRow)))
+    If rngRows Is Nothing Then Exit Sub
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    prevCalc = Application.Calculation
+    Application.Calculation = xlCalculationManual
+
+    For Each area In rngRows.Areas
+
+        ligDeb = area.Row
+        ligFin = area.Row + area.Rows.Count - 1
+
+        Me.Range(COL_FIRST & ligDeb & ":" & COL_COMP2_MAIN & ligFin).Interior.Pattern = xlNone
+        Me.Range(COL_DATE & ligDeb & ":" & COL_OBS & ligFin).Interior.Pattern = xlNone
+
+        arrConf = Me.Range(COL_CONF & ligDeb & ":" & COL_CONF & ligFin).Value2
+
+        If IsArray(arrConf) Then
+            etatCourant = -1
+
+            For i = 1 To UBound(arrConf, 1)
+                ligCourante = ligDeb + i - 1
+                etatLigne = CodeEtatConformite(CStr(arrConf(i, 1)))
+
+                If etatCourant = -1 Then
+                    etatCourant = etatLigne
+                    ligDeb = ligCourante
+
+                ElseIf etatLigne <> etatCourant Then
+                    AppliquerCouleurConformiteBloc ligDeb, ligCourante - 1, etatCourant
+                    etatCourant = etatLigne
+                    ligDeb = ligCourante
+                End If
+            Next i
+
+            AppliquerCouleurConformiteBloc ligDeb, ligFin, etatCourant
+
+        Else
+            AppliquerCouleurConformiteBloc ligDeb, ligFin, CodeEtatConformite(CStr(arrConf))
+        End If
+    Next area
+
+Fin:
+    On Error Resume Next
+    Application.Calculation = prevCalc
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    On Error GoTo 0
+
+End Sub
+
+' =============================================
+' 3-1CouleurConformiteLigne
+' =============================================
+Private Sub CouleurConformiteLigne(ByVal lig As Long)
+
+    Dim rngLigne As Range
+    Dim valConf As String
+
+    If lig < ROW_START Then Exit Sub
+
+    Set rngLigne = Union( _
+        Me.Range(COL_FIRST & lig & ":" & COL_COMP2_MAIN & lig), _
+        Me.Range(COL_DATE & lig & ":" & COL_OBS & lig) _
+    )
+
+    valConf = LCase$(Trim$(CStr(Me.Cells(lig, COL_CONF).Value)))
+
+    Select Case valConf
+        Case LCase$(VAL_CONF_1)
+            rngLigne.Interior.Color = COLOR_CONF_CONFORME
+
+        Case LCase$(VAL_CONF_2)
+            rngLigne.Interior.Color = COLOR_CONF_NON_CONFORME
+
+        Case LCase$(VAL_CONF_3)
+            rngLigne.Interior.Color = COLOR_CONF_EXAMEN
+
+        Case Else
+            rngLigne.Interior.Pattern = xlNone
+    End Select
+
+End Sub
+
+' =============================================
+' 3-2 CouleurConformiteZone
+' =============================================
+Private Sub CouleurConformiteZone(ByVal rngConf As Range)
+
+    Dim area As Range
+    Dim cell As Range
+    Dim lig As Long
+    Dim ligPrec As Long
+
+    If rngConf Is Nothing Then Exit Sub
+
+    For Each area In rngConf.Areas
+        ligPrec = -1
+
+        For Each cell In area.Cells
+            lig = cell.Row
+
+            If lig >= ROW_START Then
+                If lig <> ligPrec Then
+                    CouleurConformiteLigne lig
+                    ligPrec = lig
+                End If
+            End If
+        Next cell
+    Next area
+
+End Sub
+
+' =============================================
+' 3-3 CodeEtatConformite
+' =============================================
+Private Function CodeEtatConformite(ByVal valConf As String) As Long
+
+    Select Case LCase$(Trim$(valConf))
+        Case LCase$(VAL_CONF_1)
+            CodeEtatConformite = 1   ' conforme
+
+        Case LCase$(VAL_CONF_2)
+            CodeEtatConformite = 2   ' non conforme
+
+        Case LCase$(VAL_CONF_3)
+            CodeEtatConformite = 3   ' examen
+
+        Case Else
+            CodeEtatConformite = 0   ' aucun fond
+    End Select
+
+End Function
+
+' =============================================
+' 3-4 AppliquerCouleurConformiteBloc
+' =============================================
+Private Sub AppliquerCouleurConformiteBloc(ByVal ligDeb As Long, ByVal ligFin As Long, ByVal codeEtat As Long)
+
+    Dim couleurFond As Long
+
+    If ligDeb > ligFin Then Exit Sub
+    If codeEtat = 0 Then Exit Sub
+
+    Select Case codeEtat
+        Case 1
+            couleurFond = COLOR_CONF_CONFORME
+        Case 2
+            couleurFond = COLOR_CONF_NON_CONFORME
+        Case 3
+            couleurFond = COLOR_CONF_EXAMEN
+        Case Else
+            Exit Sub
+    End Select
+
+    Me.Range(COL_FIRST & ligDeb & ":" & COL_COMP2_MAIN & ligFin).Interior.Color = couleurFond
+    Me.Range(COL_DATE & ligDeb & ":" & COL_OBS & ligFin).Interior.Color = couleurFond
+
+End Sub
+
+' =============================================
+' 3-5 RafraichirCouleursConformite
+' =============================================
+Public Sub RafraichirCouleursConformite()
+
+    Dim lastRow As Long
+    Dim arrConf As Variant
+    Dim prevCalc As XlCalculation
+    Dim i As Long
+    Dim ligCourante As Long
+    Dim ligDeb As Long
+    Dim etatCourant As Long
+    Dim etatLigne As Long
+
+    On Error GoTo Fin
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    prevCalc = Application.Calculation
+    Application.Calculation = xlCalculationManual
+
+    lastRow = DerniereLigneUtile()
+    If lastRow < ROW_START Then GoTo Fin
+
+    ' ===== Nettoyage global une seule fois =====
+    Me.Range(COL_FIRST & ROW_START & ":" & COL_COMP2_MAIN & lastRow).Interior.Pattern = xlNone
+    Me.Range(COL_DATE & ROW_START & ":" & COL_OBS & lastRow).Interior.Pattern = xlNone
+
+    arrConf = Me.Range(COL_CONF & ROW_START & ":" & COL_CONF & lastRow).Value2
+
+    If IsArray(arrConf) Then
+
+        etatCourant = -1
+
+        For i = 1 To UBound(arrConf, 1)
+            ligCourante = ROW_START + i - 1
+            etatLigne = CodeEtatConformite(CStr(arrConf(i, 1)))
+
+            If etatCourant = -1 Then
+                etatCourant = etatLigne
+                ligDeb = ligCourante
+
+            ElseIf etatLigne <> etatCourant Then
+                AppliquerCouleurConformiteBloc ligDeb, ligCourante - 1, etatCourant
+                etatCourant = etatLigne
+                ligDeb = ligCourante
+            End If
+        Next i
+
+        AppliquerCouleurConformiteBloc ligDeb, lastRow, etatCourant
+
+    Else
+        AppliquerCouleurConformiteBloc ROW_START, ROW_START, CodeEtatConformite(CStr(arrConf))
+    End If
+
+Fin:
+    On Error Resume Next
+    Application.Calculation = prevCalc
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    On Error GoTo 0
+
+End Sub
+
+' =============================================
+' 4. MajStyleBarreRecherche
+' =============================================
+Private Sub MajStyleBarreRecherche(ByVal cell As Range)
+    If cell.Row <> ROW_RECHERCHE Then Exit Sub
+    If cell.Column > NB_COL_RECHERCHE Then Exit Sub
+
+    Me.Range(PLAGE_RECHERCHE).Interior.Color = COLOR_RECHERCHE_FOND
+    cell.Interior.Color = COLOR_RECHERCHE_ACTIVE
+End Sub
+
+' =============================================
+' 5. InitialiserPlaceholders
+' =============================================
+Public Sub InitialiserPlaceholders()
+
+    Dim wsTitres As Worksheet
+    Dim arrTitres As Variant
+    Dim arrLigneRecherche As Variant
+    Dim arrEcriture As Variant
+    Dim rngAColorier As Range
+    Dim i As Long
+
+    Set wsTitres = ThisWorkbook.Worksheets(SHEET_TITRES)
+
+    Me.Range(PLAGE_RECHERCHE).Interior.Color = COLOR_RECHERCHE_FOND
+
+    arrTitres = wsTitres.Range(COL_FIRST & ROW_TITRES & ":" & COL_LAST_RECHERCHE & ROW_TITRES).Value
+    arrLigneRecherche = Me.Range(PLAGE_RECHERCHE).Value
+
+    ReDim arrEcriture(1 To 1, 1 To NB_COL_RECHERCHE)
+
+    For i = 1 To NB_COL_RECHERCHE
+        If Trim$(CStr(arrLigneRecherche(1, i))) = "" Then
+            arrEcriture(1, i) = arrTitres(1, i)
+
+            If rngAColorier Is Nothing Then
+                Set rngAColorier = Me.Cells(ROW_RECHERCHE, i)
+            Else
+                Set rngAColorier = Union(rngAColorier, Me.Cells(ROW_RECHERCHE, i))
+            End If
+        Else
+            arrEcriture(1, i) = arrLigneRecherche(1, i)
+        End If
+    Next i
+
+    Me.Range(PLAGE_RECHERCHE).Value = arrEcriture
+
+    If Not rngAColorier Is Nothing Then
+        rngAColorier.Font.Color = COLOR_PLACEHOLDER
+    End If
+
+End Sub
+
+' =============================================
+' 6. GererPlaceholderSelection
+' =============================================
+Private Sub GererPlaceholderSelection(ByVal Target As Range)
+
+    Dim cell As Range
+    Dim titre As String
+    Dim wsTitres As Worksheet
+
+    If Target.Row <> ROW_RECHERCHE Then Exit Sub
+    If Target.Column > NB_COL_RECHERCHE Then Exit Sub
+
+    Set wsTitres = ThisWorkbook.Worksheets(SHEET_TITRES)
+    Set cell = Target.Cells(1, 1)
+    titre = wsTitres.Cells(ROW_TITRES, cell.Column).Value
+
+    If cell.Value = titre Then
+        cell.Value = ""
+        cell.Font.Color = COLOR_TEXTE_NOIR
+    End If
+
+End Sub
+
+' =============================================
+' 7. RestaurerPlaceholder
+' =============================================
+Private Sub RestaurerPlaceholder(ByVal Target As Range)
+
+    Dim cell As Range
+    Dim titre As String
+    Dim wsTitres As Worksheet
+
+    If Target.Row <> ROW_RECHERCHE Then Exit Sub
+    If Target.Column > NB_COL_RECHERCHE Then Exit Sub
+
+    Set wsTitres = ThisWorkbook.Worksheets(SHEET_TITRES)
+    Set cell = Target.Cells(1, 1)
+    titre = wsTitres.Cells(ROW_TITRES, cell.Column).Value
+
+    If Trim$(cell.Value) = "" Then
+        cell.Value = titre
+        cell.Font.Color = COLOR_PLACEHOLDER
+    ElseIf Trim$(cell.Value) = titre Then
+        cell.Font.Color = COLOR_PLACEHOLDER
+    Else
+        cell.Font.Color = COLOR_TEXTE_NOIR
+    End If
+
+End Sub
+
+' =============================================
+' 8. SUIVI AGENT (SPECIFIQUE BDD-RF)
+' =============================================
+
+Private Sub HandleSuiviAgent(ByVal Target As Range)
+
+    On Error GoTo CleanFail
+
+    Dim zoneProtegee As Range
+    Dim zoneConformite As Range
+    Dim cell As Range
+    Dim cellAC As Range
+    Dim area As Range
+    Dim arrConf As Variant, arrDate As Variant, arrNom As Variant
+    Dim arrNomDate As Variant
+    Dim i As Long
+    Dim lig As Long, ligPrec As Long
+    Dim nomSession As String
+    Dim dateSession As Variant
+    Dim nomLigne As String
+    Dim dateLigne As Variant
+    Dim valConf As String
+    Dim firstLig As Long, lastLig As Long
+    Dim idx As Long
+    Dim eventsWereDisabled As Boolean
+
+    Set zoneProtegee = Intersect(Target, Union(Me.Range(PLAGE_EDITABLE_MAIN), Me.Range(PLAGE_EDITABLE_SUIVI), Me.Range(PLAGE_EDITABLE_AIDE)))
+    If zoneProtegee Is Nothing Then GoTo SortiePropre
+
+    nomSession = Trim$(CStr(Me.Range(CELL_NOM_SESSION).Value))
+    dateSession = Me.Range(CELL_DATE_SESSION).Value
+
+    If nomSession = "" Or Not IsDate(dateSession) Then GoTo SortiePropre
+
+    Set zoneConformite = Intersect(Target, Me.Range(COL_CONF & ROW_START & ":" & COL_CONF & Me.Rows.Count))
+    If Not zoneConformite Is Nothing Then
+        For Each cellAC In zoneConformite.Cells
+            valConf = LCase$(Trim$(CStr(cellAC.Value)))
+            If valConf <> "" And valConf <> LCase$(VAL_CONF_1) And valConf <> LCase$(VAL_CONF_2) And valConf <> LCase$(VAL_CONF_3) Then
+                AnnulerDerniereAction
+                MsgBox "Valeur non autorisée en colonne " & COL_CONF & "." & vbCrLf & MSG_VALEURS_CONF, vbExclamation
+                GoTo SortiePropre
+            End If
+        Next cellAC
+    End If
+
+    If Target.CountLarge = 1 Then
+        If Target.Column = Me.Range(COL_CONF & "1").Column And Target.Row >= ROW_START Then
+
+            lig = Target.Row
+
+            If Not ModeDeveloppeurActif Then
+                nomLigne = Trim$(CStr(Me.Cells(lig, COL_NOM).Value))
+                dateLigne = Me.Cells(lig, COL_DATE).Value
+
+                If nomLigne <> "" Then
+                    If StrComp(nomLigne, nomSession, vbTextCompare) <> 0 Then
+                        AnnulerDerniereAction
+                        MsgBox "Modification impossible : cette ligne appartient à un autre agent.", vbExclamation
+                        GoTo SortiePropre
+                    End If
+                End If
+
+                If IsDate(dateLigne) Then
+                    If CDate(dateLigne) <> CDate(dateSession) Then
+                        AnnulerDerniereAction
+                        MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                        GoTo SortiePropre
+                    End If
+                End If
+            End If
+
+            Application.EnableEvents = False
+            eventsWereDisabled = True
+
+            If Trim$(CStr(Target.Value)) = "" Then
+                Me.Cells(lig, COL_DATE).ClearContents
+                Me.Cells(lig, COL_NOM).ClearContents
+            Else
+                If Trim$(CStr(Me.Cells(lig, COL_DATE).Value)) = "" Then
+                    Me.Cells(lig, COL_DATE).Value = CDate(dateSession)
+                End If
+                If Trim$(CStr(Me.Cells(lig, COL_NOM).Value)) = "" Then
+                    Me.Cells(lig, COL_NOM).Value = nomSession
+                End If
+            End If
+
+            GoTo SortieAvecCouleur
+        End If
+    End If
+
+    If Not ModeDeveloppeurActif Then
+        If Not Me.FilterMode Then
+            firstLig = zoneProtegee.Row
+            lastLig = zoneProtegee.Areas(zoneProtegee.Areas.Count).Cells( _
+                      zoneProtegee.Areas(zoneProtegee.Areas.Count).Cells.Count).Row
+            If firstLig < ROW_START Then firstLig = ROW_START
+            arrNomDate = Me.Range(COL_DATE & firstLig & ":" & COL_NOM & lastLig).Value
+        End If
+
+        ligPrec = 0
+        For Each cell In zoneProtegee.Cells
+            lig = cell.Row
+            If lig >= ROW_START Then
+                If lig <> ligPrec Then
+                    ligPrec = lig
+
+                    If Me.FilterMode Then
+                        nomLigne = Trim$(CStr(Me.Cells(lig, COL_NOM).Value))
+                        dateLigne = Me.Cells(lig, COL_DATE).Value
+                    Else
+                        idx = lig - firstLig + 1
+                        dateLigne = arrNomDate(idx, 1)
+                        nomLigne = Trim$(CStr(arrNomDate(idx, 2)))
+                    End If
+
+                    If nomLigne <> "" Then
+                        If StrComp(nomLigne, nomSession, vbTextCompare) <> 0 Then
+                            AnnulerDerniereAction
+                            MsgBox "Modification impossible : cette ligne appartient à un autre agent.", vbExclamation
+                            GoTo SortiePropre
+                        End If
+                    End If
+
+                    If IsDate(dateLigne) Then
+                        If CDate(dateLigne) <> CDate(dateSession) Then
+                            AnnulerDerniereAction
+                            MsgBox "Modification impossible : cette ligne ne correspond pas à la date du jour.", vbExclamation
+                            GoTo SortiePropre
+                        End If
+                    End If
+                End If
+            End If
+        Next cell
+    End If
+
+    If zoneConformite Is Nothing Then GoTo SortiePropre
+
+    Application.EnableEvents = False
+    eventsWereDisabled = True
+
+    For Each area In zoneConformite.Areas
+
+        If area.Cells.CountLarge = 1 Then
+
+            If Trim$(CStr(area.Value)) = "" Then
+                Me.Cells(area.Row, COL_DATE).ClearContents
+                Me.Cells(area.Row, COL_NOM).ClearContents
+            Else
+                If Trim$(CStr(Me.Cells(area.Row, COL_DATE).Value)) = "" Then
+                    Me.Cells(area.Row, COL_DATE).Value = CDate(dateSession)
+                End If
+                If Trim$(CStr(Me.Cells(area.Row, COL_NOM).Value)) = "" Then
+                    Me.Cells(area.Row, COL_NOM).Value = nomSession
+                End If
+            End If
+
+        Else
+            firstLig = area.Row
+            lastLig = area.Row + area.Rows.Count - 1
+
+            arrConf = area.Value
+            arrDate = Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value
+            arrNom = Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value
+
+            For i = 1 To UBound(arrConf, 1)
+                If Me.FilterMode Then
+                    If Me.Rows(firstLig + i - 1).Hidden Then GoTo LigneSuivante
+                End If
+
+                If Trim$(CStr(arrConf(i, 1))) = "" Then
+                    arrDate(i, 1) = ""
+                    arrNom(i, 1) = ""
+                Else
+                    If Trim$(CStr(arrDate(i, 1))) = "" Then arrDate(i, 1) = CDate(dateSession)
+                    If Trim$(CStr(arrNom(i, 1))) = "" Then arrNom(i, 1) = nomSession
+                End If
+LigneSuivante:
+            Next i
+
+            Me.Range(COL_DATE & firstLig & ":" & COL_DATE & lastLig).Value = arrDate
+            Me.Range(COL_NOM & firstLig & ":" & COL_NOM & lastLig).Value = arrNom
+
+        End If
+
+    Next area
+
+SortieAvecCouleur:
+    If Not zoneConformite Is Nothing Then
+        CouleurConformiteZone zoneConformite
+    End If
+
+SortiePropre:
+    If eventsWereDisabled Then Application.EnableEvents = True
+    Exit Sub
+
+CleanFail:
+    If eventsWereDisabled Then Application.EnableEvents = True
+    MsgBox "Erreur : " & Err.Description, vbExclamation
+
+End Sub
+
+' =============================================
+' 9. ZoneValidationInvalide (SPECIFIQUE BDD-RF)
+' =============================================
+Private Function ZoneValidationInvalide(ByVal rngZone As Range) As Boolean
+
+    Dim zoneCheck As Range
+    Dim data As Variant
+    Dim r As Long, c As Long
+    Dim txt As String
+    Dim absCol As Long
+    Dim nbRows As Long, nbCols As Long
+
+    ZoneValidationInvalide = False
+
+    If rngZone Is Nothing Then Exit Function
+
+    Set zoneCheck = Intersect(rngZone, Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Rows.Count))
+    If zoneCheck Is Nothing Then Exit Function
+
+    If Not RulesLoaded Then InitRules
+    UpdateDynamicRules
+
+    data = zoneCheck.Value2
+
+    If IsArray(data) Then
+        nbRows = UBound(data, 1)
+        nbCols = UBound(data, 2)
+
+        For r = 1 To nbRows
+            For c = 1 To nbCols
+
+                absCol = zoneCheck.Column + c - 1
+
+                If absCol < 1 Or absCol > NB_COL_TABLE Then GoTo CellSuivante
+                If Rules(absCol).Name = "" Then GoTo CellSuivante
+                If IsError(data(r, c)) Then GoTo CellSuivante
+
+                txt = CStr(data(r, c))
+
+                If Not ValeurConformeRegles(absCol, txt) Then
+                    ZoneValidationInvalide = True
+                    Exit Function
+                End If
+
+CellSuivante:
+            Next c
+        Next r
+
+    Else
+        absCol = zoneCheck.Column
+
+        If absCol >= 1 And absCol <= NB_COL_TABLE Then
+            If Rules(absCol).Name <> "" Then
+                If Not IsError(data) Then
+                    txt = CStr(data)
+                    If Not ValeurConformeRegles(absCol, txt) Then
+                        ZoneValidationInvalide = True
+                        Exit Function
+                    End If
+                End If
+            End If
+        End If
+    End If
+
+End Function
+
+' =============================================
+' 10. REGLES 1 InitRules (SPECIFIQUE BDD-RF)
+' =============================================
+Private Sub InitRules()
+    If RulesLoaded Then Exit Sub
+
+    Dim i As Integer
+    For i = 1 To NB_COL_TABLE
+        Rules(i).Name = ""
+    Next i
+
+    AddRule "A", "Tranche RF", Val_LIST, True, False, 1, 1, "Un caractère numérique compris entre 0 et 9", "0,1,2,3,4,5,6,7,8,9", "compris entre 0 et 9"
+    AddRule "B", "Système Elémentaire RF", Val_ALPHANUM, True, False, 3, 3, "3 caractères texte"
+    AddRule "C", "Numéro RF", Val_NUMERIC, False, False, 3, 4, "4 Chiffres"
+    AddRule "D", "Bigramme RF", Val_ALPHANUM, False, False, 2, 3
+    AddRule "E", "Complément 1", Val_ALPHANUM, False, False, 1, 4
+    AddRule "F", "Complément 2", Val_ANY, False, False, 0, 2
+    AddRule "G", "Libellé", Val_ANY, True, False, 1, 40, "40 caractères maximum"
+    AddRule "H", "Local", Val_ALPHANUM, True, False, 1, 11, "11 caractères maximum"
+    AddRule "I", "Qualité", Val_LIST, False, False, 2, 3, "NQS, QS, IPS ou NC", "NQS,QS,IPS,NC", "NQS, QS, IPS ou NC"
+    AddRule "J", "Carroyage", Val_ALPHANUM, False, False, 1, 2
+    AddRule "K", "Folio", Val_ALPHANUM, False, False, 1, 7
+    AddRule "L", "Contrôle pose", Val_LIST, True, False, 1, 1, "N (Non) par défaut ou O (Oui)", "O,N", "O (Oui) ou N (Non)"
+    AddRule "M", "Situation de réf.", Val_LIST, True, False, 2, 2, "EX (Exploitation), HX (Hors Exploitation) ou NC (Non Condamnable)", "EX,HX,NC", "EX, HX ou NC"
+
+    AddRule "N", "Tranche RF", Val_LIST, False, True, 1, 1, "Un caractère numérique compris entre 0 et 9", "0,1,2,3,4,5,6,7,8,9", "compris entre 0 et 9"
+    AddRule "O", "Système Elémentaire RF", Val_ALPHANUM, False, True, 3, 3, "3 caractères texte"
+    AddRule "P", "Numéro RF", Val_NUMERIC, False, False, 3, 4, "4 Chiffres"
+    AddRule "Q", "Bigramme RF", Val_ALPHANUM, False, False, 2, 3
+    AddRule "R", "Complément 1", Val_ALPHANUM, False, False, 1, 4
+    AddRule "S", "Complément 2", Val_ANY, False, False, 0, 0
+    AddRule "T", "Libellé", Val_ANY, False, True, 1, 40, "40 caractères maximum"
+    AddRule "U", "Local", Val_ALPHANUM, False, True, 1, 11, "11 caractères maximum"
+    AddRule "V", "Qualité", Val_LIST, False, False, 2, 3, "NQS, QS, IPS ou NC", "NQS,QS,IPS,NC", "NQS, QS, IPS ou NC"
+    AddRule "W", "Carroyage", Val_ALPHANUM, False, False, 1, 2
+    AddRule "X", "Folio", Val_ALPHANUM, False, False, 1, 7
+    AddRule "Y", "Contrôle pose", Val_LIST, False, True, 1, 1, "N (Non) par défaut ou O (Oui)", "O,N", "O (Oui) ou N (Non)"
+    AddRule "Z", "Situation de réf.", Val_LIST, False, True, 2, 2, "EX (Exploitation), HX (Hors Exploitation) ou NC (Non Condamnable)", "EX,HX,NC", "EX, HX ou NC"
+
+    RulesLoaded = True
+End Sub
+
+' ============================================================
+' 11. Regles 2 AddRule (SPECIFIQUE BDD-RF)
+' ============================================================
+Private Sub AddRule(colLetter As String, fName As String, fType As ValidationType, isMandMain As Boolean, _
+                    isMandAssoc As Boolean, Optional fMin As Integer, Optional fMax As Integer, Optional fHint As String = "", _
+                    Optional allowed As String = "", Optional erreurHorsPlage As String = "", Optional forceUpper As Boolean = True)
+
+    Dim idx As Integer
+    Dim v As Variant
+
+    idx = Me.Range(colLetter & "1").Column
+
+    With Rules(idx)
+        .Name = fName
+        .VType = fType
+        .MinLen = fMin
+        .MaxLen = fMax
+        .IsMandatoryMain = isMandMain
+        .IsMandatoryAssoc = isMandAssoc
+        .Hint = fHint
+        .ForceUpperCase = forceUpper
+        .AllowedValues = allowed
+        .erreurHorsPlage = erreurHorsPlage
+
+        If fType = Val_LIST And allowed <> "" Then
+            Set .AllowedDict = CreateObject("Scripting.Dictionary")
+            For Each v In Split(allowed, ",")
+                .AllowedDict(Trim$(CStr(v))) = 1
+            Next v
+        End If
+
+        .forbiddenChars = ";,@&"
+        .ForbiddenPattern = "*[" & .forbiddenChars & "]*"
+    End With
+
+End Sub
+
+' ============================================================
+' 12. Regles 3 UpdateDynamicRules (SPECIFIQUE BDD-RF)
+' ============================================================
+Private Sub UpdateDynamicRules()
+
+    Dim targetLen As Integer
+    Dim valE2 As Variant
+
+    If Not m_E2Loaded Then
+        m_CachedE2 = Me.Range(COL_COMP1_MAIN & "2").Value
+        m_E2Loaded = True
+    End If
+    valE2 = m_CachedE2
+
+    If UCase$(Trim$(CStr(valE2))) = "NON" Then
+        targetLen = 3
+    Else
+        targetLen = 4
+    End If
+
+    With Rules(3)
+        .MinLen = targetLen
+        .MaxLen = targetLen
+        .Hint = targetLen & " Chiffres"
+    End With
+
+    With Rules(16)
+        .MinLen = targetLen
+        .MaxLen = targetLen
+        .Hint = targetLen & " Chiffres"
+    End With
+
+End Sub
+
+' =============================================
+' 12.bis Validation commune d'une cellule
+' =============================================
+Private Function ValeurConformeRegles(ByVal absCol As Long, ByVal txt As String, _
+                                      Optional ByVal isMainActive As Boolean = False, _
+                                      Optional ByVal isAssocActive As Boolean = False, _
+                                      Optional ByVal verifierObligatoireSiVide As Boolean = False) As Boolean
+
+    Dim vLen As Long
+
+    ValeurConformeRegles = True
+
+    If absCol < 1 Or absCol > NB_COL_TABLE Then Exit Function
+    If Rules(absCol).Name = "" Then Exit Function
+
+    vLen = Len(txt)
+
+    With Rules(absCol)
+
+        If vLen = 0 Then
+            If verifierObligatoireSiVide Then
+                If (.IsMandatoryMain And isMainActive) Or (.IsMandatoryAssoc And isAssocActive) Then
+                    ValeurConformeRegles = False
+                End If
+            End If
+            Exit Function
+        End If
+
+        If ColonneAvecReferentiel(absCol) Then
+            If Not ValeurReferentielValide(absCol, txt) Then
+                ValeurConformeRegles = False
+                Exit Function
+            End If
+        End If
+
+        If .ForceUpperCase Then
+            If txt <> UCase$(txt) Then
+                ValeurConformeRegles = False
+                Exit Function
+            End If
+        End If
+
+        If vLen < .MinLen Or vLen > .MaxLen Then
+            ValeurConformeRegles = False
+            Exit Function
+        End If
+
+        If txt Like .ForbiddenPattern Then
+            ValeurConformeRegles = False
+            Exit Function
+        End If
+
+        If .VType = Val_LIST Then
+            If Not .AllowedDict Is Nothing Then
+                If Not .AllowedDict.Exists(txt) Then
+                    ValeurConformeRegles = False
+                    Exit Function
+                End If
+            End If
+        End If
+
+        If .VType = Val_NUMERIC Then
+            If txt Like "*[!0-9]*" Then
+                ValeurConformeRegles = False
+                Exit Function
+            End If
+        End If
+
+    End With
+
+End Function
+
+' ============================================================
+' 13. ProcessValidationAreas (SPECIFIQUE BDD-RF)
+' ============================================================
+Private Sub ProcessValidationAreas(ByVal rngChanged As Range)
+
+    Dim area As Range
+    Dim rngFullRows As Range
+
+    For Each area In rngChanged.Areas
+        Set rngFullRows = Me.Range(COL_FIRST & area.Row & ":" & COL_SITUATION_ASSOC & area.Row + area.Rows.Count - 1)
+        ProcessValidationBlock rngFullRows
+    Next area
+
+End Sub
+
+' =============================================
+' 14. ProcessValidationBlock (SPECIFIQUE BDD-RF)
+' =============================================
+Private Sub ProcessValidationBlock(ByVal rngFullRows As Range)
+
+    Dim data As Variant
+    Dim invalid() As Boolean
+    Dim wasRed() As Boolean
+    Dim r As Long, c As Long
+    Dim rowOffset As Long
+    Dim rowsCount As Long
+    Dim colsCount As Long
+    Dim strVal As String
+    Dim vLen As Long
+    Dim isEmptyMain As Boolean
+    Dim isEmptyAssoc As Boolean
+    Dim isMainActive As Boolean
+    Dim isAssocActive As Boolean
+    Dim hasDataChanged As Boolean
+    Dim isValid As Boolean
+    Dim paddedVal As String
+    Dim rngRouge As Range
+    Dim rngNone As Range
+    Dim cell As Range
+    Dim currentColor As Variant
+
+    If rngFullRows Is Nothing Then Exit Sub
+
+    data = rngFullRows.Value2
+    rowOffset = rngFullRows.Row
+
+    If Not IsArray(data) Then Exit Sub
+
+    rowsCount = UBound(data, 1)
+    colsCount = UBound(data, 2)
+
+    ReDim invalid(1 To rowsCount, 1 To colsCount)
+    ReDim wasRed(1 To rowsCount, 1 To colsCount)
+
+    hasDataChanged = False
+
+    For r = 1 To rowsCount
+        For c = 1 To colsCount
+            currentColor = Me.Cells(rowOffset + r - 1, c).Interior.Color
+            wasRed(r, c) = (currentColor = COLOR_ERREUR_ROUGE)
+        Next c
+    Next r
+
+    For r = 1 To rowsCount
+
+        isEmptyMain = True
+        For c = 1 To NB_COL_BLOC_MAIN
+            If Len(CStr(data(r, c))) > 0 Then
+                isEmptyMain = False
+                Exit For
+            End If
+        Next c
+
+        isEmptyAssoc = True
+        For c = FIRST_COL_BLOC_ASSOC To NB_COL_TABLE
+            If Len(CStr(data(r, c))) > 0 Then
+                isEmptyAssoc = False
+                Exit For
+            End If
+        Next c
+
+        isMainActive = (Not isEmptyMain) Or (Not isEmptyAssoc)
+        isAssocActive = (Not isEmptyAssoc)
+
+        For c = 1 To colsCount
+
+            If c > NB_COL_TABLE Then GoTo NextColumn
+            If Rules(c).Name = "" Then GoTo NextColumn
+
+            strVal = CStr(data(r, c))
+            vLen = Len(strVal)
+            isValid = True
+
+            With Rules(c)
+
+                ' ===== Zero-padding automatique pour les colonnes numériques =====
+                If .VType = Val_NUMERIC And vLen > 0 Then
+                    If vLen < .MaxLen And strVal Like String$(vLen, "#") Then
+                        paddedVal = Right$(String$(.MaxLen, "0") & strVal, .MaxLen)
+                        If paddedVal <> strVal Then
+                            data(r, c) = paddedVal
+                            strVal = paddedVal
+                            vLen = Len(strVal)
+                            hasDataChanged = True
+                        End If
+                    End If
+                End If
+
+                ' ===== Validation mutualisée =====
+                isValid = ValeurConformeRegles(c, strVal, isMainActive, isAssocActive, True)
+
+            End With
+
+            invalid(r, c) = Not isValid
+
+NextColumn:
+        Next c
+    Next r
+
+    If hasDataChanged Then
+        rngFullRows.Value2 = data
+    End If
+
+    For r = 1 To rowsCount
+        For c = 1 To colsCount
+            If invalid(r, c) <> wasRed(r, c) Then
+                Set cell = Me.Cells(rowOffset + r - 1, c)
+
+                If invalid(r, c) Then
+                    If rngRouge Is Nothing Then
+                        Set rngRouge = cell
+                    Else
+                        Set rngRouge = Union(rngRouge, cell)
+                    End If
+                Else
+                    If rngNone Is Nothing Then
+                        Set rngNone = cell
+                    Else
+                        Set rngNone = Union(rngNone, cell)
+                    End If
+                End If
+            End If
+        Next c
+    Next r
+
+    If Not rngRouge Is Nothing Then rngRouge.Interior.Color = COLOR_ERREUR_ROUGE
+    If Not rngNone Is Nothing Then rngNone.Interior.Pattern = xlNone
+
+End Sub
+
+' ============================================================
+' 15. SetApplicationVariables (SPECIFIQUE BDD-RF)
+' ============================================================
+Private Sub SetApplicationVariables(ByVal isActive As Boolean)
+
+    With Application
+        If Not isActive Then
+            If Not m_AppStateSaved Then
+                m_PrevScreenUpdating = .ScreenUpdating
+                m_PrevEnableEvents = .EnableEvents
+                m_PrevDisplayStatusBar = .DisplayStatusBar
+                m_PrevCalculation = .Calculation
+                m_AppStateSaved = True
+            End If
+
+            .ScreenUpdating = False
+            .EnableEvents = False
+            .DisplayStatusBar = False
+            .Calculation = xlCalculationManual
+
+        Else
+            If m_AppStateSaved Then
+                .ScreenUpdating = m_PrevScreenUpdating
+                .EnableEvents = m_PrevEnableEvents
+                .DisplayStatusBar = m_PrevDisplayStatusBar
+                .Calculation = m_PrevCalculation
+                m_AppStateSaved = False
+            Else
+                .ScreenUpdating = True
+                .EnableEvents = True
+                .DisplayStatusBar = True
+                .Calculation = xlCalculationAutomatic
+            End If
+        End If
+    End With
+
+End Sub
+
+' ==========================================================
+' 16. RafraichirCouleursValidation (SPECIFIQUE BDD-RF)
+' ==========================================================
+Public Sub RafraichirCouleursValidation()
+
+    On Error GoTo Fin
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    If Not RulesLoaded Then InitRules
+    UpdateDynamicRules
+
+    ProcessValidationBlock Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Cells(Me.Rows.Count, COL_FIRST).End(xlUp).Row)
+
+Fin:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+
+End Sub
+
+' =============================================
+' 17. BloquerValeursListeNonAutorisees
+' =============================================
+Private Function BloquerValeursListeNonAutorisees(ByVal rngZone As Range) As Boolean
+
+    Dim zoneCheck As Range
+    Dim area As Range
+    Dim data As Variant
+    Dim r As Long, c As Long
+    Dim absCol As Long
+    Dim valeurCellule As String
+    Dim msgValeurs As String
+
+    BloquerValeursListeNonAutorisees = False
+
+    If rngZone Is Nothing Then Exit Function
+
+    Set zoneCheck = Intersect(rngZone, Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Rows.Count))
+    If zoneCheck Is Nothing Then Exit Function
+
+    If Not RulesLoaded Then InitRules
+    UpdateDynamicRules
+
+    For Each area In zoneCheck.Areas
+        data = area.Value2
+
+        If IsArray(data) Then
+            For r = 1 To UBound(data, 1)
+                For c = 1 To UBound(data, 2)
+                    absCol = area.Column + c - 1
+
+                    If absCol >= 1 And absCol <= NB_COL_TABLE Then
+                        If Rules(absCol).VType = Val_LIST Then
+                            valeurCellule = UCase$(Trim$(CStr(data(r, c))))
+
+                            If valeurCellule <> "" Then
+                                If Rules(absCol).AllowedDict Is Nothing Then GoTo ValeurInterdite
+                                If Not Rules(absCol).AllowedDict.Exists(valeurCellule) Then GoTo ValeurInterdite
+                            End If
+                        End If
+                    End If
+                Next c
+            Next r
+        Else
+            absCol = area.Column
+
+            If absCol >= 1 And absCol <= NB_COL_TABLE Then
+                If Rules(absCol).VType = Val_LIST Then
+                    valeurCellule = UCase$(Trim$(CStr(data)))
+
+                    If valeurCellule <> "" Then
+                        If Rules(absCol).AllowedDict Is Nothing Then GoTo ValeurInterdite
+                        If Not Rules(absCol).AllowedDict.Exists(valeurCellule) Then GoTo ValeurInterdite
+                    End If
+                End If
+            End If
+        End If
+    Next area
+
+    Exit Function
+
+ValeurInterdite:
+    msgValeurs = Replace(Rules(absCol).AllowedValues, ",", ", ")
+
+    AnnulerDerniereAction
+    MsgBox "Valeur non autorisée en colonne " & LettreColonne(absCol) & _
+           " (" & Rules(absCol).Name & ")." & vbCrLf & _
+           "Valeurs autorisées : " & msgValeurs & ".", vbExclamation
+
+    BloquerValeursListeNonAutorisees = True
+
+End Function
+
+' =============================================
+' 18. LettreColonne
+' =============================================
+Private Function LettreColonne(ByVal colNum As Long) As String
+    LettreColonne = Split(Me.Cells(1, colNum).Address(False, False), "1")(0)
+End Function
+
+' =============================================
+' 19. DoitAfficherMessageDetaille
+' =============================================
+Private Function DoitAfficherMessageDetaille(ByVal rngZone As Range) As Boolean
+
+    Dim cell As Range
+    Dim absCol As Long
+
+    DoitAfficherMessageDetaille = False
+
+    If rngZone Is Nothing Then Exit Function
+    If rngZone.CountLarge <> 1 Then Exit Function
+    If Application.CutCopyMode <> 0 Then Exit Function
+
+    Set cell = rngZone.Cells(1, 1)
+    absCol = cell.Column
+
+    If absCol < 1 Or absCol > NB_COL_TABLE Then Exit Function
+    If Rules(absCol).Name = "" Then Exit Function
+    If Rules(absCol).VType = Val_LIST Then Exit Function
+    If Trim$(CStr(cell.Value)) = "" Then Exit Function
+
+    DoitAfficherMessageDetaille = True
+
+End Function
+
+' =============================================
+' 20. ConstruireMessageErreurDetaillee
+' =============================================
+Private Function ConstruireMessageErreurDetaillee(ByVal cell As Range) As String
+
+    Dim absCol As Long
+    Dim txt As String
+    Dim nbCar As Long
+    Dim nbEcart As Long
+    Dim msg As String
+    Dim charsInterdits As String
+
+    absCol = cell.Column
+    txt = CStr(cell.Value)
+    nbCar = Len(txt)
+
+    msg = "Valeur non conforme." & vbCrLf & vbCrLf
+
+    With Rules(absCol)
+
+        If nbCar > .MaxLen Then
+            nbEcart = nbCar - .MaxLen
+            msg = msg & nbCar & " caractères saisis." & vbCrLf & _
+                        .MaxLen & " caractères maximum." & vbCrLf & _
+                        "Supprimer " & nbEcart & " caractère" & IIf(nbEcart > 1, "s", "") & "." & vbCrLf
+        ElseIf nbCar < .MinLen Then
+            nbEcart = .MinLen - nbCar
+            msg = msg & nbCar & " caractères saisis." & vbCrLf & _
+                        .MinLen & " caractères minimum." & vbCrLf & _
+                        "Ajouter " & nbEcart & " caractère" & IIf(nbEcart > 1, "s", "") & "." & vbCrLf
+        End If
+
+        charsInterdits = ListerCaracteresInterdits(txt, .forbiddenChars)
+        If charsInterdits <> "" Then
+            If Right$(msg, 2) <> vbCrLf & vbCrLf Then msg = msg & vbCrLf
+            msg = msg & IIf(InStr(charsInterdits, ",") > 0, _
+                            "Caractères interdits détectés (" & charsInterdits & ").", _
+                            "Caractère interdit détecté (" & charsInterdits & ").")
+        End If
+
+        If .VType = Val_NUMERIC Then
+            If txt Like "*[!0-9]*" Then
+                If Right$(msg, 2) <> vbCrLf & vbCrLf Then msg = msg & vbCrLf
+                msg = msg & "Chiffres uniquement."
+            End If
+        End If
+
+    End With
+
+    If Right$(msg, 2) = vbCrLf Then
+        msg = Left$(msg, Len(msg) - 2)
+    End If
+
+    ConstruireMessageErreurDetaillee = msg
+
+End Function
+
+' =============================================
+' 21. REFERENTIELS RF - CHARGEMENT MEMOIRE
+' =============================================
+Private Sub ChargerColonneDansDictionnaire(ByVal ws As Worksheet, ByRef dict As Object)
+
+    Dim lastRow As Long
+    Dim data As Variant
+    Dim r As Long
+    Dim v As String
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    lastRow = ws.Cells(ws.Rows.Count, COL_REFERENTIEL).End(xlUp).Row
+    If lastRow < ROW_REFERENTIEL_START Then Exit Sub
+
+    data = ws.Range(COL_REFERENTIEL & ROW_REFERENTIEL_START & ":" & COL_REFERENTIEL & lastRow).Value
+
+    If IsArray(data) Then
+        For r = 1 To UBound(data, 1)
+            v = UCase$(Trim$(CStr(data(r, 1))))
+            If v <> "" Then
+                If Not dict.Exists(v) Then dict.Add v, 1
+            End If
+        Next r
+    Else
+        v = UCase$(Trim$(CStr(data)))
+        If v <> "" Then dict.Add v, 1
+    End If
+
+End Sub
+' =============================================
+' 21-1 REFERENTIELS RF - CHARGEMENT MEMOIRE
+' =============================================
+Private Sub ChargerReferentielsRF()
+
+    Dim wsLocaux As Worksheet
+    Dim wsCarroyages As Worksheet
+
+    Set wsLocaux = ThisWorkbook.Worksheets(SHEET_LOCAUX)
+    Set wsCarroyages = ThisWorkbook.Worksheets(SHEET_CARROYAGES)
+
+    ChargerColonneDansDictionnaire wsLocaux, mDictLocaux
+    ChargerColonneDansDictionnaire wsCarroyages, mDictCarroyages
+
+    mReferentielsCharges = True
+
+End Sub
+
+' =============================================
+' 21-2 REFERENTIELS RF - CHARGEMENT MEMOIRE
+' =============================================
+Private Sub AssurerReferentielsRFCharges()
+    If Not mReferentielsCharges Then ChargerReferentielsRF
+End Sub
+
+' =============================================
+' 21-3 REFERENTIELS RF - CHARGEMENT MEMOIRE
+' =============================================
+Public Sub RechargerReferentielsRF()
+    mReferentielsCharges = False
+    ChargerReferentielsRF
+End Sub
+
+' =============================================
+' 22. REFERENTIELS RF - COLONNES CONCERNEES
+' =============================================
+Private Sub AssurerColonnesRefChargees()
+    If m_ColsRefLoaded Then Exit Sub
+    m_ColLocalMain = Me.Range(COL_LOCAL_MAIN & "1").Column
+    m_ColLocalAssoc = Me.Range(COL_LOCAL_ASSOC & "1").Column
+    m_ColCarroyageMain = Me.Range(COL_CARROYAGE_MAIN & "1").Column
+    m_ColCarroyageAssoc = Me.Range(COL_CARROYAGE_ASSOC & "1").Column
+    m_ColsRefLoaded = True
+End Sub
+
+' =============================================
+' 22.-1 REFERENTIELS RF - COLONNES CONCERNEES
+' =============================================
+Private Function ColonneAvecReferentiel(ByVal absCol As Long) As Boolean
+    AssurerColonnesRefChargees
+    Select Case absCol
+        Case m_ColLocalMain, m_ColLocalAssoc, m_ColCarroyageMain, m_ColCarroyageAssoc
+            ColonneAvecReferentiel = True
+        Case Else
+            ColonneAvecReferentiel = False
+    End Select
+End Function
+
+' =============================================
+' 22.-2 REFERENTIELS RF - COLONNES CONCERNEES
+' =============================================
+Private Function ValeurReferentielValide(ByVal absCol As Long, ByVal valeur As String) As Boolean
+
+    Dim v As String
+
+    v = UCase$(Trim$(CStr(valeur)))
+
+    If v = "" Then
+        ValeurReferentielValide = True
+        Exit Function
+    End If
+
+    AssurerColonnesRefChargees
+    AssurerReferentielsRFCharges
+
+    Select Case absCol
+        Case m_ColLocalMain, m_ColLocalAssoc
+            ValeurReferentielValide = Not mDictLocaux Is Nothing And mDictLocaux.Exists(v)
+        Case m_ColCarroyageMain, m_ColCarroyageAssoc
+            ValeurReferentielValide = Not mDictCarroyages Is Nothing And mDictCarroyages.Exists(v)
+        Case Else
+            ValeurReferentielValide = True
+    End Select
+
+End Function
+
+' =============================================
+' 22-3 REFERENTIELS RF - COLONNES CONCERNEES
+' =============================================
+Private Function MessageReferentiel(ByVal absCol As Long, ByVal valeur As String) As String
+    AssurerColonnesRefChargees
+    Select Case absCol
+        Case m_ColLocalMain, m_ColLocalAssoc
+            MessageReferentiel = MSG_VALEURS_LOCAL & vbCrLf & "Valeur saisie : " & valeur
+        Case m_ColCarroyageMain, m_ColCarroyageAssoc
+            MessageReferentiel = MSG_VALEURS_CARROYAGE & vbCrLf & "Valeur saisie : " & valeur
+        Case Else
+            MessageReferentiel = "Valeur non autorisée."
+    End Select
+End Function
+
+' =============================================
+' 22-4 REFERENTIELS RF - COLONNES CONCERNEES
+' =============================================
+Private Function BloquerValeursReferentielNonAutorisees(ByVal rngZone As Range) As Boolean
+
+    Dim zoneCheck As Range
+    Dim area As Range
+    Dim data As Variant
+    Dim r As Long, c As Long
+    Dim absCol As Long
+    Dim valeurCellule As String
+
+    BloquerValeursReferentielNonAutorisees = False
+
+    If rngZone Is Nothing Then Exit Function
+
+    Set zoneCheck = Intersect(rngZone, Me.Range(COL_FIRST & ROW_START & ":" & COL_SITUATION_ASSOC & Me.Rows.Count))
+    If zoneCheck Is Nothing Then Exit Function
+
+    For Each area In zoneCheck.Areas
+        data = area.Value2
+
+        If IsArray(data) Then
+            For r = 1 To UBound(data, 1)
+                For c = 1 To UBound(data, 2)
+                    absCol = area.Column + c - 1
+
+                    If ColonneAvecReferentiel(absCol) Then
+                        valeurCellule = UCase$(Trim$(CStr(data(r, c))))
+
+                        If valeurCellule <> "" Then
+                            If Not ValeurReferentielValide(absCol, valeurCellule) Then
+                                AnnulerDerniereAction
+                                MsgBox MessageReferentiel(absCol, valeurCellule), vbExclamation
+                                BloquerValeursReferentielNonAutorisees = True
+                                Exit Function
+                            End If
+                        End If
+                    End If
+                Next c
+            Next r
+        Else
+            absCol = area.Column
+
+            If ColonneAvecReferentiel(absCol) Then
+                valeurCellule = UCase$(Trim$(CStr(data)))
+
+                If valeurCellule <> "" Then
+                    If Not ValeurReferentielValide(absCol, valeurCellule) Then
+                        AnnulerDerniereAction
+                        MsgBox MessageReferentiel(absCol, valeurCellule), vbExclamation
+                        BloquerValeursReferentielNonAutorisees = True
+                        Exit Function
+                    End If
+                End If
+            End If
+        End If
+    Next area
+
+End Function
+
+' =============================================
+' 23. ListerCaracteresInterdits
+' =============================================
+Private Function ListerCaracteresInterdits(ByVal txt As String, ByVal forbiddenChars As String) As String
+
+    Dim i As Long
+    Dim ch As String
+    Dim res As String
+
+    For i = 1 To Len(forbiddenChars)
+        ch = Mid$(forbiddenChars, i, 1)
+        If InStr(1, txt, ch, vbBinaryCompare) > 0 Then
+            If InStr(1, res, ch, vbBinaryCompare) = 0 Then
+                If res <> "" Then res = res & ", "
+                res = res & ch
+            End If
+        End If
+    Next i
+
+    ListerCaracteresInterdits = res
+
+End Function
+
+' =============================================
+' 24. RafraichirCouleursValidationSurLignes
+' =============================================
+Public Sub RafraichirCouleursValidationSurLignes(ByVal adresseLignes As String)
+
+    Dim lastRow As Long
+    Dim rngRows As Range
+    Dim area As Range
+
+    On Error GoTo Fin
+
+    If adresseLignes = "" Then Exit Sub
+
+    lastRow = DerniereLigneUtile()
+    If lastRow < ROW_START Then Exit Sub
+
+    Set rngRows = Intersect(Me.Range(adresseLignes), Me.Rows(CStr(ROW_START) & ":" & CStr(lastRow)))
+    If rngRows Is Nothing Then Exit Sub
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    If Not RulesLoaded Then InitRules
+    UpdateDynamicRules
+
+    For Each area In rngRows.Areas
+        ProcessValidationBlock Me.Range(COL_FIRST & area.Row & ":" & COL_SITUATION_ASSOC & area.Row + area.Rows.Count - 1)
+    Next area
+
+Fin:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+
+End Sub
+
+' =============================================
+' 25. RetirerBordureSelectionActive
+' =============================================
+Private Sub RetirerBordureSelectionActive()
+
+    Static Dummy As Boolean
+    Dim rng As Range
+
+    On Error GoTo Fin
+
+    If ActiveCell Is Nothing Then GoTo Fin
+    If ActiveCell.Row < ROW_START Then GoTo Fin
+
+    Set rng = Me.Range(Me.Cells(ActiveCell.Row, 1), Me.Cells(ActiveCell.Row, NB_COL_UI))
+
+    With rng
+        With .Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = COLOR_BORDURE_BLEUE
+        End With
+        With .Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = COLOR_BORDURE_BLEUE
+        End With
+    End With
+
+Fin:
+
+End Sub
+
+
