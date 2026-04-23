@@ -725,7 +725,7 @@ Private Sub ForcerExamenSiConformeIncomplet(ByVal rngSource As Range, ByRef rngC
 
 End Sub
 
-Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConformite As Range) As Boolean
+Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConformite As Range, Optional ByVal confAvantEdition As String = "") As Boolean
 
     Dim confActuelle As String
     Dim confCible As String
@@ -733,6 +733,7 @@ Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConfor
 
     confActuelle = LCase$(Trim$(CStr(Me.Cells(lig, COL_CONF).Value)))
     confCible = confActuelle
+    confAvantEdition = LCase$(Trim$(confAvantEdition))
 
     If Not zoneConformite Is Nothing Then
         Set cellConf = Intersect(zoneConformite, Me.Cells(lig, COL_CONF))
@@ -741,14 +742,55 @@ Private Function LigneExamenPourControleDate(ByVal lig As Long, ByVal zoneConfor
         End If
     End If
 
-    If confCible = LCase$(VAL_CONF_1) Or confCible = LCase$(VAL_CONF_2) Then
-        LigneExamenPourControleDate = False
+    If confAvantEdition = LCase$(VAL_CONF_3) Then
+        LigneExamenPourControleDate = True
         Exit Function
     End If
 
     If confActuelle = LCase$(VAL_CONF_3) Or confCible = LCase$(VAL_CONF_3) Then
         LigneExamenPourControleDate = True
+        Exit Function
     End If
+
+    If confCible = LCase$(VAL_CONF_1) Or confCible = LCase$(VAL_CONF_2) Then
+        LigneExamenPourControleDate = False
+        Exit Function
+    End If
+
+End Function
+
+Private Function AncienneConformiteCandidat(ByVal lig As Long) As String
+
+    Dim i As Long
+    Dim zone As Range
+    Dim dataZone As Variant
+    Dim idxLig As Long
+    Dim idxCol As Long
+    Dim colConf As Long
+
+    If CandidateSheet <> Me.Name Then Exit Function
+    If IsEmpty(CandidateMainAddresses) Then Exit Function
+
+    colConf = Me.Range(COL_CONF & "1").Column
+
+    For i = LBound(CandidateMainAddresses) To UBound(CandidateMainAddresses)
+        Set zone = Me.Range(CStr(CandidateMainAddresses(i)))
+
+        If lig >= zone.Row And lig <= zone.Row + zone.Rows.Count - 1 Then
+            If colConf >= zone.Column And colConf <= zone.Column + zone.Columns.Count - 1 Then
+                dataZone = CandidateMainDatas(i)
+                idxLig = lig - zone.Row + 1
+                idxCol = colConf - zone.Column + 1
+
+                If IsArray(dataZone) Then
+                    AncienneConformiteCandidat = LCase$(Trim$(CStr(dataZone(idxLig, idxCol))))
+                Else
+                    AncienneConformiteCandidat = LCase$(Trim$(CStr(dataZone)))
+                End If
+                Exit Function
+            End If
+        End If
+    Next i
 
 End Function
 
@@ -812,7 +854,7 @@ Private Sub HandleSuiviAgent(ByVal Target As Range)
             If Not ModeDeveloppeurActif Then
                 nomLigne = Trim$(CStr(Me.Cells(lig, COL_NOM).Value))
                 dateLigne = Me.Cells(lig, COL_DATE).Value
-                bLigneExamen = LigneExamenPourControleDate(lig, zoneConformite)
+                bLigneExamen = LigneExamenPourControleDate(lig, zoneConformite, AncienneConformiteCandidat(lig))
 
                 If nomLigne <> "" Then
                     If StrComp(nomLigne, nomSession, vbTextCompare) <> 0 Then
