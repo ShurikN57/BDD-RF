@@ -1,5 +1,4 @@
-﻿Attribute VB_Name = "zRFThisWorkbook"
-Option Explicit
+﻿Option Explicit
 
 ' ============================================================
 ' Open
@@ -177,3 +176,4 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error GoTo 0
 
 End Sub
+

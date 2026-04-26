@@ -1,5 +1,4 @@
-﻿Attribute VB_Name = "GMC"
-Option Explicit
+﻿Option Explicit
 
 ' =============================================
 ' 0. VARIABLES FEUILLE (UNIQUEMENT)
@@ -1955,3 +1954,4 @@ Private Sub RetirerBordureSelectionActive()
 Fin:
 
 End Sub
+

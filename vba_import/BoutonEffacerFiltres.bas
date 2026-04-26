@@ -1,5 +1,4 @@
 Attribute VB_Name = "BoutonEffacerFiltres"
-
 Option Explicit
 
 ' =============================================

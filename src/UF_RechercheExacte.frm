@@ -1,9 +1,9 @@
 ﻿VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_RechercheExacte 
    Caption         =   "Recherche exacte RF principal"
-   ClientHeight    =   1332
-   ClientLeft      =   396
-   ClientTop       =   1548
+   ClientHeight    =   1335
+   ClientLeft      =   390
+   ClientTop       =   1545
    ClientWidth     =   4560
    OleObjectBlob   =   "UF_RechercheExacte_codex.frx":0000
    StartUpPosition =   1  'CenterOwner
@@ -13,7 +13,12 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
+
+Private Sub txtRecherche_Change()
+
+End Sub
 
 ' ============================================================
 ' UF_RechercheExacte

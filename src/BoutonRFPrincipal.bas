@@ -1,5 +1,4 @@
 ﻿Attribute VB_Name = "BoutonRFPrincipal"
-
 Option Explicit
 
 ' =============================================

@@ -1,10 +1,10 @@
 ﻿VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UF_Agent 
    Caption         =   "Sélection de l'agent"
-   ClientHeight    =   3228
-   ClientLeft      =   336
-   ClientTop       =   1308
-   ClientWidth     =   4284
+   ClientHeight    =   3225
+   ClientLeft      =   330
+   ClientTop       =   1305
+   ClientWidth     =   4290
    OleObjectBlob   =   "UF_Agent_codex.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
