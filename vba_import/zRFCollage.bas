@@ -86,7 +86,7 @@ Public Sub CollerValeursRecherche()
             On Error GoTo FinAvecErreur
 
             If zoneVisible Is Nothing Then
-                MsgBox "Aucune cellule visible sélectionnée.", vbExclamation
+                MsgBox "Aucune cellule visible sÃ©lectionnÃ©e.", vbExclamation
                 GoTo Fin
             End If
 
@@ -99,7 +99,7 @@ Public Sub CollerValeursRecherche()
     Set cibleReelleCollage = ConstruirePlageReelleCollage(ws, cibleFinale)
 
     If cibleReelleCollage Is Nothing Then
-        MsgBox "Impossible de déterminer la taille réelle du collage. Recopiez puis recollez.", vbExclamation
+        MsgBox "Impossible de dÃ©terminer la taille rÃ©elle du collage. Recopiez puis recollez.", vbExclamation
         GoTo Fin
     End If
 
@@ -109,13 +109,13 @@ Public Sub CollerValeursRecherche()
     End If
 
     If Application.CutCopyMode = 0 Then
-        MsgBox "Le contenu copié a été perdu. Recopiez puis recollez.", vbExclamation
+        MsgBox "Le contenu copiÃ© a Ã©tÃ© perdu. Recopiez puis recollez.", vbExclamation
         GoTo Fin
     End If
 
     bValeurUnique = False
 
-    ' ===== Cas filtre + sélection discontinue =====
+    ' ===== Cas filtre + sÃ©lection discontinue =====
     If cibleReelleCollage.Areas.Count > 1 Then
 
         If DerniereCopieValeurUniqueValide Then
@@ -126,7 +126,7 @@ Public Sub CollerValeursRecherche()
         End If
 
         If Not bValeurUnique Then
-            MsgBox "Sous filtre, seul le collage d'une valeur unique sur plusieurs lignes visibles est autorisé." & vbCrLf & vbCrLf & _
+            MsgBox "Sous filtre, seul le collage d'une valeur unique sur plusieurs lignes visibles est autorisÃ©." & vbCrLf & vbCrLf & _
                    "Pour un collage multi-cellules, retirez le filtre ou collez sur une zone continue.", vbExclamation
             GoTo Fin
         End If
@@ -202,8 +202,8 @@ Public Sub CollerValeursRecherche()
                    And vCheck <> LCase$(VAL_CONF_3) Then
 
                     AnnulerDerniereAction
-    Application.EnableEvents = prevEnableEvents
-    Application.EnableEvents = prevEnableEvents
+                    MsgBox MSG_VALEURS_CONF, vbExclamation
+                    GoTo Fin
                 End If
             End If
         Next cellV
@@ -215,14 +215,14 @@ Fin:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = True
+    Application.EnableEvents = prevEnableEvents
     Exit Sub
 
 FinAvecErreur:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = True
+    Application.EnableEvents = prevEnableEvents
     MsgBox "Erreur lors du collage : " & Err.description, vbExclamation
 
 End Sub
@@ -388,7 +388,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_TRANCHE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisée pour la Tranche RF." & vbCrLf & MSG_VALEURS_TRANCHE, vbExclamation
+                            MsgBox "Valeur non autorisÃ©e pour la Tranche RF." & vbCrLf & MSG_VALEURS_TRANCHE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -408,7 +408,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_QUALITE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisée pour la Qualité." & vbCrLf & MSG_VALEURS_QUALITE, vbExclamation
+                            MsgBox "Valeur non autorisÃ©e pour la QualitÃ©." & vbCrLf & MSG_VALEURS_QUALITE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -428,7 +428,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_POSE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisée pour le Contrôle pose." & vbCrLf & MSG_VALEURS_POSE, vbExclamation
+                            MsgBox "Valeur non autorisÃ©e pour le ContrÃ´le pose." & vbCrLf & MSG_VALEURS_POSE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -448,7 +448,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_SITUATION, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisée pour la Situation de référence." & vbCrLf & MSG_VALEURS_SITUATION, vbExclamation
+                            MsgBox "Valeur non autorisÃ©e pour la Situation de rÃ©fÃ©rence." & vbCrLf & MSG_VALEURS_SITUATION, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -594,7 +594,7 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
         LireDimensionsCopieesDepuisPressePapiers nbRows, nbCols
     End If
 
-    ' Si on ne connaît toujours pas la taille réelle, on bloque
+    ' Si on ne connaÃ®t toujours pas la taille rÃ©elle, on bloque
     If nbRows <= 0 Or nbCols <= 0 Then Exit Function
 
     Set rngTopLeft = cibleFinale.Cells(1, 1)

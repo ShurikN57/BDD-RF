@@ -202,8 +202,8 @@ Public Sub CollerValeursRecherche()
                    And vCheck <> LCase$(VAL_CONF_3) Then
 
                     AnnulerDerniereAction
-    Application.EnableEvents = prevEnableEvents
-    Application.EnableEvents = prevEnableEvents
+                    MsgBox MSG_VALEURS_CONF, vbExclamation
+                    GoTo Fin
                 End If
             End If
         Next cellV
@@ -215,14 +215,14 @@ Fin:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = True
+    Application.EnableEvents = prevEnableEvents
     Exit Sub
 
 FinAvecErreur:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = True
+    Application.EnableEvents = prevEnableEvents
     MsgBox "Erreur lors du collage : " & Err.description, vbExclamation
 
 End Sub
@@ -615,4 +615,3 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
     Set ConstruirePlageReelleCollage = rngResult
 
 End Function
-
