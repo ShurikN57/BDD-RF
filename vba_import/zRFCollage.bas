@@ -578,6 +578,8 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
     Dim rngTopLeft As Range
     Dim nbRows As Long
     Dim nbCols As Long
+    Dim nbRowsCible As Long
+    Dim nbColsCible As Long
 
     If cibleFinale Is Nothing Then Exit Function
 
@@ -602,14 +604,14 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
     If cibleFinale.Cells.CountLarge = 1 Then
         Set rngResult = rngTopLeft.Resize(nbRows, nbCols)
 
-    ElseIf cibleFinale.Columns.Count = 1 And nbCols > 1 Then
-        Set rngResult = cibleFinale.Resize(cibleFinale.Rows.Count, nbCols)
-
-    ElseIf cibleFinale.Rows.Count = 1 And nbRows > 1 Then
-        Set rngResult = cibleFinale.Resize(nbRows, cibleFinale.Columns.Count)
-
     Else
-        Set rngResult = cibleFinale
+        nbRowsCible = cibleFinale.Rows.Count
+        nbColsCible = cibleFinale.Columns.Count
+
+        If nbRowsCible = 1 And nbRows > 1 Then nbRowsCible = nbRows
+        If nbColsCible = 1 And nbCols > 1 Then nbColsCible = nbCols
+
+        Set rngResult = rngTopLeft.Resize(nbRowsCible, nbColsCible)
     End If
 
     Set ConstruirePlageReelleCollage = rngResult
