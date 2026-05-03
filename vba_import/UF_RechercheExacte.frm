@@ -13,12 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
-
 Option Explicit
-
-Private Sub txtRecherche_Change()
-
-End Sub
 
 ' ============================================================
 ' UF_RechercheExacte
@@ -30,6 +25,9 @@ Private Sub UserForm_Initialize()
 
 End Sub
 
+' ============================================================
+'
+' ============================================================
 Private Sub cmdRechercher_Click()
 
     On Error GoTo ErrHandler
@@ -53,6 +51,7 @@ Private Sub cmdRechercher_Click()
     lastRow = ws.Cells(ws.Rows.Count, COL_FIRST).End(xlUp).Row
 
     If lastRow < ROW_START Then
+        MettreAJourCompteurs
         MsgBox "Aucune donnée dans la feuille.", vbExclamation
         Exit Sub
     End If
@@ -75,6 +74,9 @@ Private Sub cmdRechercher_Click()
 
     filterRange.AutoFilter Field:=fieldIndex, Criteria1:="=" & valeurRecherchee
 
+    MettreAJourCompteurs
+
+SortiePropre:
     Application.ScreenUpdating = True
     Exit Sub
 
@@ -83,6 +85,10 @@ ErrHandler:
     MsgBox "Erreur lors de la recherche : " & Err.description, vbCritical
 
 End Sub
+
+' ============================================================
+'
+' ============================================================
 
 Private Sub cmdReset_Click()
 
@@ -113,6 +119,9 @@ Private Sub cmdReset_Click()
 
     Me.txtRecherche.Value = ""
 
+    RestaurerCompteursInitiaux
+
+SortiePropre:
     Application.ScreenUpdating = True
     Exit Sub
 
@@ -121,10 +130,19 @@ ErrHandler:
     MsgBox "Erreur lors de la réinitialisation : " & Err.description, vbCritical
 
 End Sub
-
+' ============================================================
+'
+' ============================================================
 Private Sub cmdFermer_Click()
     Unload Me
 End Sub
+
+
+
+
+
+
+
 
 
 

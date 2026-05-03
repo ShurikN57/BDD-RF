@@ -1,48 +1,10 @@
 Attribute VB_Name = "BoutonZoom"
 Option Explicit
-' =============================================
-'                BoutonZoom
-' =============================================
 
-#If VBA7 Then
-    Private Declare PtrSafe Function MonitorFromWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal dwFlags As Long) As LongPtr
-    Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoA" (ByVal hMonitor As LongPtr, lpmi As MONITORINFO) As Long
-#Else
-    Private Declare Function MonitorFromWindow Lib "user32" (ByVal hwnd As Long, ByVal dwFlags As Long) As Long
-    Private Declare Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoA" (ByVal hMonitor As Long, lpmi As MONITORINFO) As Long
-#End If
-
-Private Const MONITOR_DEFAULTTONEAREST As Long = 2
-Private Const MONITORINFOF_PRIMARY As Long = 1
-
-Private Type RECT
-    Left As Long
-    Top As Long
-    Right As Long
-    Bottom As Long
-End Type
-
-Private Type MONITORINFO
-    cbSize As Long
-    rcMonitor As RECT
-    rcWork As RECT
-    dwFlags As Long
-End Type
-
-Public Sub ZoomPrincipalSecondaire()
+Public Sub ZoomAutoTableau()
 
     Dim tbl As ListObject
-    Dim i As Long
-    Dim premiereColVisible As Long
-
-#If VBA7 Then
-    Dim hMon As LongPtr
-#Else
-    Dim hMon As Long
-#End If
-
-    Dim mi As MONITORINFO
-    Dim estPrincipal As Boolean
+    Dim rngVisible As Range
 
     On Error GoTo Fin
 
@@ -54,37 +16,21 @@ Public Sub ZoomPrincipalSecondaire()
 
     Set tbl = ActiveSheet.ListObjects(1)
 
-    For i = 1 To tbl.ListColumns.Count
-        If Not tbl.ListColumns(i).Range.EntireColumn.Hidden Then
-            premiereColVisible = tbl.ListColumns(i).Range.Column
-            Exit For
-        End If
-    Next i
+    On Error Resume Next
+    Set rngVisible = tbl.HeaderRowRange.SpecialCells(xlCellTypeVisible)
+    On Error GoTo Fin
 
-    If premiereColVisible > 0 Then
-        ActiveWindow.ScrollColumn = premiereColVisible
-    End If
+    If rngVisible Is Nothing Then GoTo Fin
 
-    hMon = MonitorFromWindow(Application.hwnd, MONITOR_DEFAULTTONEAREST)
-    If hMon = 0 Then GoTo Fin
+    rngVisible.Select
+    ActiveWindow.Zoom = True
 
-    mi.cbSize = Len(mi)
-    If GetMonitorInfo(hMon, mi) = 0 Then GoTo Fin
+    tbl.HeaderRowRange.Cells(1, 1).Select
 
-    estPrincipal = ((mi.dwFlags And MONITORINFOF_PRIMARY) <> 0)
-
-    If estPrincipal Then
-        ActiveWindow.Zoom = ZOOM_ECRAN_PRINCIPAL
-    Else
-        ActiveWindow.Zoom = ZOOM_ECRAN_SECONDAIRE
-    End If
-
-    If premiereColVisible > 0 Then
-        ActiveWindow.ScrollColumn = premiereColVisible
-    End If
+    ActiveWindow.ScrollRow = 1
+    ActiveWindow.ScrollColumn = rngVisible.Cells(1, 1).Column
 
 Fin:
     Application.ScreenUpdating = True
 
 End Sub
-

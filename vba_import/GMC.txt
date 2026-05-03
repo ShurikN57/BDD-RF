@@ -1586,8 +1586,8 @@ End Function
 ' =============================================
 ' 18. LettreColonne
 ' =============================================
-Private Function LettreColonne(ByVal colNum As Long) As String
-    LettreColonne = Split(Me.Cells(1, colNum).Address(False, False), "1")(0)
+Private Function LettreColonne(ByVal ColNum As Long) As String
+    LettreColonne = Split(Me.Cells(1, ColNum).Address(False, False), "1")(0)
 End Function
 
 ' =============================================
@@ -1954,4 +1954,6 @@ Private Sub RetirerBordureSelectionActive()
 Fin:
 
 End Sub
+
+
 

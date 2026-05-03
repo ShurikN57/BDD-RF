@@ -1,6 +1,9 @@
 Attribute VB_Name = "CentrerUserForm"
 Option Explicit
 
+' =============================================
+'            Centrer UserForm
+' =============================================
 #If VBA7 Then
     Public Declare PtrSafe Function MonitorFromWindow Lib "user32" ( _
         ByVal hwnd As LongPtr, ByVal dwFlags As Long) As LongPtr
@@ -92,4 +95,3 @@ Fallback:
     frm.Top = Application.Top + (Application.Height - frm.Height) * ratioTop
 
 End Sub
-

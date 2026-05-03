@@ -36,6 +36,7 @@ Public Sub EffacerFiltres()
 
     ws.Range(PLAGE_RECHERCHE).ClearContents
     InitialiserPlaceholdersFeuillePrincipale
+    NettoyerBordureSelectionApresFiltre ws
 
 SortiePropre:
     Application.Calculation = prevCalculation
@@ -48,3 +49,41 @@ ErrHandler:
     Resume SortiePropre
 
 End Sub
+
+' =============================================
+' Nettoyage bordure après filtre
+' =============================================
+Private Sub NettoyerBordureSelectionApresFiltre(ByVal ws As Worksheet)
+
+    Dim rngLigne As Range
+    Dim lig As Long
+
+    On Error GoTo Fin
+
+    If ws Is Nothing Then Exit Sub
+    If Not ws Is ActiveSheet Then Exit Sub
+    If ActiveCell Is Nothing Then Exit Sub
+
+    lig = ActiveCell.Row
+    If lig < ROW_START Then Exit Sub
+
+    Set rngLigne = ws.Range(ws.Cells(lig, 1), ws.Cells(lig, NB_COL_UI))
+
+    With rngLigne
+        With .Borders(xlEdgeTop)
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = COLOR_BORDURE_BLEUE
+        End With
+        With .Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = COLOR_BORDURE_BLEUE
+        End With
+    End With
+
+Fin:
+
+End Sub
+
+

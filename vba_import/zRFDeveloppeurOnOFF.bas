@@ -4,11 +4,33 @@ Option Explicit
 ' =============================================
 '            Mode DeveloppeurONOFF
 ' =============================================
-
 Public ModeDeveloppeurActif As Boolean
 
 ' =============================================
-' OUTILS
+' 0. BLOCAGE / DEBLOCAGE ALT+F11
+' =============================================
+Public Sub BloquerAltF11()
+    Application.OnKey "%{F11}", "AccesFerme"
+End Sub
+
+Public Sub DebloquerAltF11()
+    Application.OnKey "%{F11}"
+End Sub
+
+Public Sub AccesFerme()
+    MsgBox "Accès non autorisé.", vbCritical
+End Sub
+
+Public Sub OuvrirEditeurVBA()
+    Application.VBE.MainWindow.Visible = True
+End Sub
+
+Public Sub ModeDeveloppeur_OFF_Bouton()
+    ModeDeveloppeur_OFF False
+End Sub
+
+' =============================================
+' 1. ConstruirePlageEditable
 ' =============================================
 Private Function ConstruirePlageEditable(ByVal ws As Worksheet, ByVal lastRow As Long) As Range
 
@@ -56,6 +78,9 @@ Private Function ConstruirePlageEditable(ByVal ws As Worksheet, ByVal lastRow As
 
 End Function
 
+' =============================================
+' 2. AppliquerValidationListeSurPlage
+' =============================================
 Private Sub AppliquerValidationListeSurPlage(ByVal rng As Range, ByVal wsSource As Worksheet, ByVal plageSource As String, _
                                              ByVal messageErreur As String, Optional ByVal inputTitre As String = "", _
                                              Optional ByVal inputMessage As String = "")
@@ -91,6 +116,9 @@ Private Sub AppliquerValidationListeSurPlage(ByVal rng As Range, ByVal wsSource 
 
 End Sub
 
+' =============================================
+' 3. AppliquerValidationsListesRF
+' =============================================
 Private Sub AppliquerValidationsListesRF()
 
     Dim ws As Worksheet
@@ -133,26 +161,7 @@ ErrHandler:
 End Sub
 
 ' =============================================
-' BLOCAGE / DEBLOCAGE ALT+F11
-' =============================================
-Public Sub BloquerAltF11()
-    Application.OnKey "%{F11}", "AccesFerme"
-End Sub
-
-Public Sub DebloquerAltF11()
-    Application.OnKey "%{F11}"
-End Sub
-
-Public Sub AccesFerme()
-    MsgBox "Accès non autorisé.", vbCritical
-End Sub
-
-Public Sub OuvrirEditeurVBA()
-    Application.VBE.MainWindow.Visible = True
-End Sub
-
-' =============================================
-' MODE DEVELOPPEUR ON
+' 4. MODE DEVELOPPEUR ON
 ' =============================================
 Public Sub ModeDeveloppeur_ON()
 
@@ -231,7 +240,7 @@ ErrHandler:
 End Sub
 
 ' =============================================
-' MODE DEVELOPPEUR OFF
+' 5. MODE DEVELOPPEUR OFF
 ' =============================================
 Public Sub ModeDeveloppeur_OFF(Optional ByVal Silencieux As Boolean = False)
 
@@ -304,8 +313,3 @@ ErrHandler:
     Resume SortiePropre
 
 End Sub
-
-Public Sub ModeDeveloppeur_OFF_Bouton()
-    ModeDeveloppeur_OFF False
-End Sub
-

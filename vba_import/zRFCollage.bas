@@ -86,7 +86,7 @@ Public Sub CollerValeursRecherche()
             On Error GoTo FinAvecErreur
 
             If zoneVisible Is Nothing Then
-                MsgBox "Aucune cellule visible sÃ©lectionnÃ©e.", vbExclamation
+                MsgBox "Aucune cellule visible sélectionnée.", vbExclamation
                 GoTo Fin
             End If
 
@@ -99,7 +99,7 @@ Public Sub CollerValeursRecherche()
     Set cibleReelleCollage = ConstruirePlageReelleCollage(ws, cibleFinale)
 
     If cibleReelleCollage Is Nothing Then
-        MsgBox "Impossible de dÃ©terminer la taille rÃ©elle du collage. Recopiez puis recollez.", vbExclamation
+        MsgBox "Impossible de déterminer la taille réelle du collage. Recopiez puis recollez.", vbExclamation
         GoTo Fin
     End If
 
@@ -109,13 +109,13 @@ Public Sub CollerValeursRecherche()
     End If
 
     If Application.CutCopyMode = 0 Then
-        MsgBox "Le contenu copiÃ© a Ã©tÃ© perdu. Recopiez puis recollez.", vbExclamation
+        MsgBox "Le contenu copié a été perdu. Recopiez puis recollez.", vbExclamation
         GoTo Fin
     End If
 
     bValeurUnique = False
 
-    ' ===== Cas filtre + sÃ©lection discontinue =====
+    ' ===== Cas filtre + sélection discontinue =====
     If cibleReelleCollage.Areas.Count > 1 Then
 
         If DerniereCopieValeurUniqueValide Then
@@ -126,7 +126,7 @@ Public Sub CollerValeursRecherche()
         End If
 
         If Not bValeurUnique Then
-            MsgBox "Sous filtre, seul le collage d'une valeur unique sur plusieurs lignes visibles est autorisÃ©." & vbCrLf & vbCrLf & _
+            MsgBox "Sous filtre, seul le collage d'une valeur unique sur plusieurs lignes visibles est autorisé." & vbCrLf & vbCrLf & _
                    "Pour un collage multi-cellules, retirez le filtre ou collez sur une zone continue.", vbExclamation
             GoTo Fin
         End If
@@ -202,7 +202,7 @@ Public Sub CollerValeursRecherche()
                    And vCheck <> LCase$(VAL_CONF_3) Then
 
                     AnnulerDerniereAction
-                    MsgBox MSG_VALEURS_CONF, vbExclamation
+                    MsgBox "Valeur non autorisée en colonne " & COL_CONF & "." & vbCrLf & MSG_VALEURS_CONF, vbExclamation
                     GoTo Fin
                 End If
             End If
@@ -215,20 +215,20 @@ Fin:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = prevEnableEvents
+    Application.EnableEvents = True
     Exit Sub
 
 FinAvecErreur:
     CollageValeursEnCours = False
     Application.CutCopyMode = False
     If Not ws Is Nothing Then NettoyerBordureSelectionApresCollage ws
-    Application.EnableEvents = prevEnableEvents
+    Application.EnableEvents = True
     MsgBox "Erreur lors du collage : " & Err.description, vbExclamation
 
 End Sub
 
 ' =============================================
-' 1-bis. NettoyerBordureSelectionApresCollage
+' 2. NettoyerBordureSelectionApresCollage
 ' =============================================
 Private Sub NettoyerBordureSelectionApresCollage(ByVal ws As Worksheet)
 
@@ -267,7 +267,7 @@ Fin:
 End Sub
 
 ' =============================================
-' 2.ConstruireZoneAutoriseeCollage
+' 3.ConstruireZoneAutoriseeCollage
 ' =============================================
 Private Function ConstruireZoneAutoriseeCollage(ByVal ws As Worksheet, ByVal lastRow As Long) As Range
 
@@ -305,7 +305,7 @@ Private Function ConstruireZoneAutoriseeCollage(ByVal ws As Worksheet, ByVal las
 End Function
 
 ' =============================================
-' 2-bis. PlageEntierementAutorisee
+' 4. PlageEntierementAutorisee
 ' =============================================
 Private Function PlageEntierementAutorisee(ByVal rngTest As Range, ByVal zoneAutorisee As Range) As Boolean
 
@@ -322,7 +322,7 @@ Private Function PlageEntierementAutorisee(ByVal rngTest As Range, ByVal zoneAut
 End Function
 
 ' =============================================
-' 3.ValeurDansListe
+' 5. ValeurDansListe
 ' =============================================
 Private Function ValeurDansListe(ByVal wsListes As Worksheet, ByVal adressePlage As String, ByVal valeur As String) As Boolean
 
@@ -363,7 +363,7 @@ Private Function ValeurDansListe(ByVal wsListes As Worksheet, ByVal adressePlage
 End Function
 
 ' =============================================
-' 4.ControlerCollageColonnesListe
+' 6. ControlerCollageColonnesListe
 ' =============================================
 Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibleFinale As Range) As Boolean
 
@@ -388,7 +388,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_TRANCHE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisÃ©e pour la Tranche RF." & vbCrLf & MSG_VALEURS_TRANCHE, vbExclamation
+                            MsgBox "Valeur non autorisée pour la Tranche RF." & vbCrLf & MSG_VALEURS_TRANCHE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -408,7 +408,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_QUALITE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisÃ©e pour la QualitÃ©." & vbCrLf & MSG_VALEURS_QUALITE, vbExclamation
+                            MsgBox "Valeur non autorisée pour la Qualité." & vbCrLf & MSG_VALEURS_QUALITE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -428,7 +428,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_POSE, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisÃ©e pour le ContrÃ´le pose." & vbCrLf & MSG_VALEURS_POSE, vbExclamation
+                            MsgBox "Valeur non autorisée pour le Contrôle pose." & vbCrLf & MSG_VALEURS_POSE, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -448,7 +448,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
                     If valeurCellule <> "" Then
                         If Not ValeurDansListe(wsListes, PLAGE_LISTE_SITUATION, valeurCellule) Then
                             AnnulerDerniereAction
-                            MsgBox "Valeur non autorisÃ©e pour la Situation de rÃ©fÃ©rence." & vbCrLf & MSG_VALEURS_SITUATION, vbExclamation
+                            MsgBox "Valeur non autorisée pour la Situation de référence." & vbCrLf & MSG_VALEURS_SITUATION, vbExclamation
                             ControlerCollageColonnesListe = False
                             Exit Function
                         End If
@@ -461,7 +461,7 @@ Private Function ControlerCollageColonnesListe(ByVal ws As Worksheet, ByVal cibl
 End Function
 
 ' =============================================
-' 5.LireValeurUniqueCopieeDepuisPressePapiers
+' 7. LireValeurUniqueCopieeDepuisPressePapiers
 ' =============================================
 Private Function LireValeurUniqueCopieeDepuisPressePapiers(ByRef bValeurUnique As Boolean) As Variant
 
@@ -494,7 +494,7 @@ Fin:
 End Function
 
 ' =============================================
-' 6.CopierValeursRecherche
+' 8. CopierValeursRecherche
 ' =============================================
 Public Sub CopierValeursRecherche()
 
@@ -524,7 +524,7 @@ Fin:
 End Sub
 
 ' =============================================
-' 6-bis. LireDimensionsCopieesDepuisPressePapiers
+' 9. LireDimensionsCopieesDepuisPressePapiers
 ' =============================================
 Private Sub LireDimensionsCopieesDepuisPressePapiers(ByRef nbRows As Long, ByRef nbCols As Long)
 
@@ -570,7 +570,7 @@ Fin:
 End Sub
 
 ' =============================================
-' 7. ConstruirePlageReelleCollage
+' 10. ConstruirePlageReelleCollage
 ' =============================================
 Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cibleFinale As Range) As Range
 
@@ -578,8 +578,6 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
     Dim rngTopLeft As Range
     Dim nbRows As Long
     Dim nbCols As Long
-    Dim nbRowsCible As Long
-    Dim nbColsCible As Long
 
     If cibleFinale Is Nothing Then Exit Function
 
@@ -596,7 +594,7 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
         LireDimensionsCopieesDepuisPressePapiers nbRows, nbCols
     End If
 
-    ' Si on ne connaÃ®t toujours pas la taille rÃ©elle, on bloque
+    ' Si on ne connaît toujours pas la taille réelle, on bloque
     If nbRows <= 0 Or nbCols <= 0 Then Exit Function
 
     Set rngTopLeft = cibleFinale.Cells(1, 1)
@@ -604,18 +602,17 @@ Private Function ConstruirePlageReelleCollage(ByVal ws As Worksheet, ByVal cible
     If cibleFinale.Cells.CountLarge = 1 Then
         Set rngResult = rngTopLeft.Resize(nbRows, nbCols)
 
+    ElseIf cibleFinale.Columns.Count = 1 And nbCols > 1 Then
+        Set rngResult = cibleFinale.Resize(cibleFinale.Rows.Count, nbCols)
+
+    ElseIf cibleFinale.Rows.Count = 1 And nbRows > 1 Then
+        Set rngResult = cibleFinale.Resize(nbRows, cibleFinale.Columns.Count)
+
     Else
-        nbRowsCible = cibleFinale.Rows.Count
-        nbColsCible = cibleFinale.Columns.Count
-
-        If nbRowsCible = 1 And nbRows > 1 Then nbRowsCible = nbRows
-        If nbColsCible = 1 And nbCols > 1 Then nbColsCible = nbCols
-
-        Set rngResult = rngTopLeft.Resize(nbRowsCible, nbColsCible)
+        Set rngResult = cibleFinale
     End If
 
     Set ConstruirePlageReelleCollage = rngResult
 
 End Function
-
 

@@ -1,0 +1,184 @@
+﻿Attribute VB_Name = "ThisWorkbook"
+Option Explicit
+
+' ============================================================
+' Open
+' ============================================================
+Private Sub Workbook_Open()
+
+    Dim wsMain As Worksheet
+
+    Dim prevScreenUpdating As Boolean
+    Dim prevEnableEvents As Boolean
+    Dim prevCalculation As XlCalculation
+
+    On Error GoTo GestionErreur
+
+    prevScreenUpdating = Application.ScreenUpdating
+    prevEnableEvents = Application.EnableEvents
+    prevCalculation = Application.Calculation
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+
+    BloquerAltF11
+    ActiverCollageValeursRecherche
+
+    Set wsMain = ThisWorkbook.Worksheets(SHEET_MAIN)
+    wsMain.Unprotect Password:=MDP_DEV
+
+    ' ===== Nettoyage validations anciennes =====
+    On Error Resume Next
+    wsMain.Range(COL_DATE & "6:" & COL_OBS & "7").Validation.Delete
+    wsMain.Range(COL_TRANCHE_MAIN & "7:" & COL_LAST & "7").Validation.Delete
+    On Error GoTo GestionErreur
+
+    ' ===== Message informatif ligne 6 =====
+    With wsMain.Range(COL_TRANCHE_MAIN & "6:" & COL_SITUATION_ASSOC & "6").Validation
+        .Delete
+        .Add Type:=xlValidateWholeNumber, _
+             AlertStyle:=xlValidAlertStop, _
+             Operator:=xlBetween, _
+             Formula1:="0", Formula2:="9999"
+        .InputTitle = "Information"
+        .inputMessage = "Nombre de caractères autorisés"
+        .ShowInput = True
+        .ShowError = False
+    End With
+
+    ' ===== Message informatif ligne 7 - champs obligatoires =====
+    With Union( _
+        wsMain.Range(COL_TRANCHE_MAIN & "7:" & COL_BIGRAMME_MAIN & "7"), _
+        wsMain.Range(COL_LIBELLE_MAIN & "7:" & COL_LOCAL_MAIN & "7"), _
+        wsMain.Range(COL_CONTROLE_MAIN & "7:" & COL_SITUATION_MAIN & "7"), _
+        wsMain.Range(COL_TRANCHE_ASSOC & "7:" & COL_BIGRAMME_ASSOC & "7"), _
+        wsMain.Range(COL_LIBELLE_ASSOC & "7:" & COL_LOCAL_ASSOC & "7"), _
+        wsMain.Range(COL_CONTROLE_ASSOC & "7:" & COL_SITUATION_ASSOC & "7") _
+    ).Validation
+        .Delete
+        .Add Type:=xlValidateWholeNumber, _
+             AlertStyle:=xlValidAlertStop, _
+             Operator:=xlBetween, _
+             Formula1:="0", Formula2:="9999"
+        .InputTitle = "Information"
+        .inputMessage = "Champ obligatoire"
+        .ShowInput = True
+        .ShowError = False
+    End With
+
+    ' ===== Message informatif ligne 7 - champs facultatifs =====
+    With Union( _
+        wsMain.Range(COL_COMP1_MAIN & "7:" & COL_COMP2_MAIN & "7"), _
+        wsMain.Range(COL_QUALITE_MAIN & "7:" & COL_FOLIO_MAIN & "7"), _
+        wsMain.Range(COL_COMP1_ASSOC & "7:" & COL_COMP2_ASSOC & "7"), _
+        wsMain.Range(COL_QUALITE_ASSOC & "7:" & COL_FOLIO_ASSOC & "7") _
+    ).Validation
+        .Delete
+        .Add Type:=xlValidateWholeNumber, _
+             AlertStyle:=xlValidAlertStop, _
+             Operator:=xlBetween, _
+             Formula1:="0", Formula2:="9999"
+        .InputTitle = "Information"
+        .inputMessage = "Champ facultatif"
+        .ShowInput = True
+        .ShowError = False
+    End With
+    
+    ModeDeveloppeur_OFF True
+     
+    GMC.RafraichirCouleursConformite
+    MettreAJourCompteurs
+    InitialiserPlaceholdersFeuillePrincipale
+    UF_Agent.Show
+
+    Application.OnKey "^l", "AllerPremiereLigneVide"
+    ThisWorkbook.Saved = True
+
+SortiePropre:
+    Application.Calculation = prevCalculation
+    Application.EnableEvents = prevEnableEvents
+    Application.ScreenUpdating = prevScreenUpdating
+    Exit Sub
+
+GestionErreur:
+    MsgBox "Erreur à l'ouverture : " & Err.description, vbExclamation
+    Resume SortiePropre
+
+End Sub
+
+' ============================================================
+' BeforeSave
+' ============================================================
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+
+    On Error GoTo ErrHandler
+
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim obsVal As String
+    Dim confVal As String
+    Dim lignesErreur As String
+    Dim nbErreurs As Long
+    Dim arrConfObs As Variant
+
+    SauvegardeAutorisee = False
+    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
+
+    lastRow = ws.Cells(ws.Rows.Count, COL_TRANCHE_MAIN).End(xlUp).Row
+
+    If lastRow < ROW_START Then
+        SauvegardeAutorisee = True
+        Exit Sub
+    End If
+
+    arrConfObs = ws.Range(ws.Cells(ROW_START, COL_CONF), ws.Cells(lastRow, COL_OBS)).Value
+
+    For i = 1 To UBound(arrConfObs, 1)
+        confVal = Trim$(CStr(arrConfObs(i, 1)))
+        obsVal = Trim$(CStr(arrConfObs(i, 2)))
+
+        If obsVal <> "" And confVal = "" Then
+            nbErreurs = nbErreurs + 1
+            If nbErreurs <= 10 Then
+                If lignesErreur <> "" Then lignesErreur = lignesErreur & ", "
+                lignesErreur = lignesErreur & (i + ROW_START - 1)
+            End If
+        End If
+    Next i
+
+    If nbErreurs > 0 Then
+        Cancel = True
+        MsgBox "Sauvegarde impossible." & vbCrLf & vbCrLf & _
+               "Si la colonne Observations (" & COL_OBS & ") est renseignée, la colonne Conformité (" & COL_CONF & ") doit obligatoirement être remplie." & vbCrLf & vbCrLf & _
+               "Lignes en erreur : " & lignesErreur & IIf(nbErreurs > 10, " ...", ""), vbExclamation
+        Exit Sub
+    End If
+
+    SauvegardeAutorisee = True
+    Exit Sub
+
+ErrHandler:
+    SauvegardeAutorisee = False
+    Cancel = True
+    MsgBox "Erreur lors de la vérification avant sauvegarde : " & Err.description, vbExclamation
+
+End Sub
+
+' ============================================================
+' BeforeClose
+' ============================================================
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+
+    On Error Resume Next
+    ModeDeveloppeur_OFF True
+    DesactiverCollageValeursRecherche
+    Application.OnKey "^l"
+    Application.OnKey "%{F11}"
+    On Error GoTo 0
+
+End Sub
+
+
+

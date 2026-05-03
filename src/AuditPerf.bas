@@ -1,8 +1,11 @@
-﻿Attribute VB_Name = "ZzAuditPerf"
+﻿Attribute VB_Name = "AuditPerf"
 Option Explicit
 
 Private Const SHEET_AUDIT As String = "AUDIT_PERF_"
 
+' =============================================
+' 1. AuditPerf
+' =============================================
 Public Sub AuditPerf()
 
     Dim wb As Workbook
@@ -36,12 +39,11 @@ Public Sub AuditPerf()
     If structureProtegee Then wb.Unprotect Password:=MDP_DEV
     On Error GoTo ErrHandler
 
-    SupprimerFeuilleAuditSiExiste wb
+    Set wsAudit = ObtenirFeuilleAudit(wb)
 
-    Set wsAudit = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
-    wsAudit.Name = SHEET_AUDIT
-
+    NettoyerFeuilleAudit wsAudit
     PreparerFeuilleAudit wsAudit
+
     nextRow = 2
 
     For Each ws In wb.Worksheets
@@ -51,7 +53,7 @@ Public Sub AuditPerf()
         End If
     Next ws
 
-    EcrireSyntheseClasseur wb, wsAudit, nextRow + 2
+    EcrireSyntheseClasseur wb, wsAudit
     MettreEnFormeAudit wsAudit
 
 SortiePropre:
@@ -70,6 +72,9 @@ ErrHandler:
 
 End Sub
 
+' =============================================
+' 2. AnalyserFeuilleRapide
+' =============================================
 Private Sub AnalyserFeuilleRapide(ByVal ws As Worksheet, ByVal wsAudit As Worksheet, ByVal outRow As Long)
 
     Dim ur As Range
@@ -139,29 +144,25 @@ Private Sub AnalyserFeuilleRapide(ByVal ws As Worksheet, ByVal wsAudit As Worksh
 
 End Sub
 
+' =============================================
+' 3. PreparerFeuilleAudit
+' =============================================
 Private Sub PreparerFeuilleAudit(ByVal wsAudit As Worksheet)
 
-    wsAudit.Cells(1, 1).Value = "Feuille"
-    wsAudit.Cells(1, 2).Value = "UsedRange"
-    wsAudit.Cells(1, 3).Value = "Nb lignes"
-    wsAudit.Cells(1, 4).Value = "Nb colonnes"
-    wsAudit.Cells(1, 5).Value = "Nb cellules"
-    wsAudit.Cells(1, 6).Value = "Nb formules"
-    wsAudit.Cells(1, 7).Value = "Nb zones MFC"
-    wsAudit.Cells(1, 8).Value = "Nb zones validations"
-    wsAudit.Cells(1, 9).Value = "Nb formes"
-    wsAudit.Cells(1, 10).Value = "Nb hyperliens"
-    wsAudit.Cells(1, 11).Value = "Nb OLE/contrôles"
-    wsAudit.Cells(1, 12).Value = "Nb commentaires"
-    wsAudit.Cells(1, 13).Value = "Nb tableaux"
-    wsAudit.Cells(1, 14).Value = "Nb TCD"
-    wsAudit.Cells(1, 15).Value = "Nb noms locaux"
-    wsAudit.Cells(1, 16).Value = "Score risque"
-    wsAudit.Cells(1, 17).Value = "Diagnostic"
+    ' Ne touche jamais à la ligne 1 :
+    ' - pas de réécriture des titres
+    ' - pas de modification des retours à la ligne
+    ' - pas de modification de la largeur des colonnes
+    '
+    ' Les titres doivent être préparés une seule fois manuellement
+    ' dans la feuille AUDIT_PERF_.
 
 End Sub
 
-Private Sub SupprimerFeuilleAuditSiExiste(ByVal wb As Workbook)
+' =============================================
+' 4. ObtenirFeuilleAudit
+' =============================================
+Private Function ObtenirFeuilleAudit(ByVal wb As Workbook) As Worksheet
 
     Dim ws As Worksheet
 
@@ -169,16 +170,55 @@ Private Sub SupprimerFeuilleAuditSiExiste(ByVal wb As Workbook)
     Set ws = wb.Worksheets(SHEET_AUDIT)
     On Error GoTo 0
 
-    If Not ws Is Nothing Then ws.Delete
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
+        ws.Name = SHEET_AUDIT
+    End If
+
+    Set ObtenirFeuilleAudit = ws
+
+End Function
+
+' =============================================
+' 4-bis. NettoyerFeuilleAudit
+' =============================================
+Private Sub NettoyerFeuilleAudit(ByVal wsAudit As Worksheet)
+
+    Dim lastRow As Long
+
+    On Error GoTo Fin
+
+    lastRow = wsAudit.Cells(wsAudit.Rows.Count, 1).End(xlUp).Row
+
+    ' On vide uniquement les anciennes données, pas la ligne 1.
+    ' La mise en forme, les largeurs et les retours à la ligne restent inchangés.
+    If lastRow >= 2 Then
+        wsAudit.Range("A2:Q" & lastRow).ClearContents
+    End If
+
+    ' Synthèse classeur : on vide seulement les valeurs S2:T4.
+    ' S1 reste intact.
+    wsAudit.Range("S2:T4").ClearContents
+
+Fin:
+    Err.Clear
 
 End Sub
 
+' =============================================
+' 5. SafeUsedRange
+' =============================================
 Private Function SafeUsedRange(ByVal ws As Worksheet) As Range
+
     On Error Resume Next
     Set SafeUsedRange = ws.UsedRange
     On Error GoTo 0
+
 End Function
 
+' =============================================
+' 6. CountFormulasFast
+' =============================================
 Private Function CountFormulasFast(ByVal ws As Worksheet) As Double
 
     Dim rng As Range
@@ -195,6 +235,9 @@ Private Function CountFormulasFast(ByVal ws As Worksheet) As Double
 
 End Function
 
+' =============================================
+' 7. CountValidationAreasFast
+' =============================================
 Private Function CountValidationAreasFast(ByVal ws As Worksheet) As Long
 
     Dim rng As Range
@@ -211,6 +254,9 @@ Private Function CountValidationAreasFast(ByVal ws As Worksheet) As Long
 
 End Function
 
+' =============================================
+' 8. CountCommentsFast
+' =============================================
 Private Function CountCommentsFast(ByVal ws As Worksheet) As Long
 
     Dim n As Long
@@ -227,6 +273,9 @@ Private Function CountCommentsFast(ByVal ws As Worksheet) As Long
 
 End Function
 
+' =============================================
+' 9. CountOLESafe
+' =============================================
 Private Function CountOLESafe(ByVal ws As Worksheet) As Long
 
     On Error Resume Next
@@ -239,6 +288,9 @@ Private Function CountOLESafe(ByVal ws As Worksheet) As Long
 
 End Function
 
+' =============================================
+' 10. CountFormatConditionAreasFast
+' =============================================
 Private Function CountFormatConditionAreasFast(ByVal ws As Worksheet) As Long
 
     Dim fc As FormatCondition
@@ -255,6 +307,9 @@ Fin:
 
 End Function
 
+' =============================================
+' 11. EvaluerScoreRapide
+' =============================================
 Private Function EvaluerScoreRapide(ByVal nbCells As Double, _
                                     ByVal nbFormules As Double, _
                                     ByVal nbShapes As Long, _
@@ -294,6 +349,9 @@ Private Function EvaluerScoreRapide(ByVal nbCells As Double, _
 
 End Function
 
+' =============================================
+' 12. DiagnosticRapide
+' =============================================
 Private Function DiagnosticRapide(ByVal nbCells As Double, _
                                   ByVal nbFormules As Double, _
                                   ByVal nbShapes As Long, _
@@ -327,7 +385,10 @@ Private Function DiagnosticRapide(ByVal nbCells As Double, _
 
 End Function
 
-Private Sub EcrireSyntheseClasseur(ByVal wb As Workbook, ByVal wsAudit As Worksheet, ByVal startRow As Long)
+' =============================================
+' 13. EcrireSyntheseClasseur
+' =============================================
+Private Sub EcrireSyntheseClasseur(ByVal wb As Workbook, ByVal wsAudit As Worksheet)
 
     Dim nbNoms As Long
     Dim nbLiensExternes As Long
@@ -338,20 +399,22 @@ Private Sub EcrireSyntheseClasseur(ByVal wb As Workbook, ByVal wsAudit As Worksh
 
     nbLiensExternes = CompterLiensExternes(wb)
 
-    wsAudit.Cells(startRow, 1).Value = "SYNTHESE CLASSEUR"
-    wsAudit.Cells(startRow, 1).Font.Bold = True
+    ' Ne touche pas à S1.
+    ' S1 doit être préparé une seule fois manuellement.
+    wsAudit.Range("S2").Value = "Nb feuilles analysées"
+    wsAudit.Range("T2").Value = wb.Worksheets.Count - 1
 
-    wsAudit.Cells(startRow + 1, 1).Value = "Nb feuilles analysées"
-    wsAudit.Cells(startRow + 1, 2).Value = wb.Worksheets.Count - 1
+    wsAudit.Range("S3").Value = "Nb noms définis classeur"
+    wsAudit.Range("T3").Value = nbNoms
 
-    wsAudit.Cells(startRow + 2, 1).Value = "Nb noms définis classeur"
-    wsAudit.Cells(startRow + 2, 2).Value = nbNoms
-
-    wsAudit.Cells(startRow + 3, 1).Value = "Nb liens externes"
-    wsAudit.Cells(startRow + 3, 2).Value = nbLiensExternes
+    wsAudit.Range("S4").Value = "Nb liens externes"
+    wsAudit.Range("T4").Value = nbLiensExternes
 
 End Sub
 
+' =============================================
+' 14. CompterLiensExternes
+' =============================================
 Private Function CompterLiensExternes(ByVal wb As Workbook) As Long
 
     Dim arr As Variant
@@ -368,19 +431,16 @@ Private Function CompterLiensExternes(ByVal wb As Workbook) As Long
 
 End Function
 
+' =============================================
+' 15. MettreEnFormeAudit
+' =============================================
 Private Sub MettreEnFormeAudit(ByVal wsAudit As Worksheet)
 
-    Dim lastRow As Long
+    ' Ne touche pas aux largeurs de colonnes.
+    ' Ne touche pas à la ligne 1.
+    ' Ne fait pas d'AutoFit.
+    ' Ne modifie pas les retours à la ligne.
 
-    lastRow = wsAudit.Cells(wsAudit.Rows.Count, 1).End(xlUp).Row
-    If lastRow < 1 Then Exit Sub
-
-    With wsAudit.Rows(1)
-        .Font.Bold = True
-        .Interior.Color = RGB(220, 230, 241)
-    End With
-
-    wsAudit.Columns("A:Q").AutoFit
     wsAudit.Activate
     wsAudit.Range("A1").Select
 

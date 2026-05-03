@@ -2,9 +2,8 @@ Attribute VB_Name = "Utilitaires"
 Option Explicit
 
 ' =============================================
-'              Utilitaires communs
+'              Utilitaires
 ' =============================================
-
 Public Function DerniereLigneUtileMain() As Long
 
     Dim ws As Worksheet
@@ -18,4 +17,3 @@ Public Function DerniereLigneUtileMain() As Long
     DerniereLigneUtileMain = lastRow
 
 End Function
-

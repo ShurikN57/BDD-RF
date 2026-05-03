@@ -1,17 +1,17 @@
-ï»¿Attribute VB_Name = "ZzZAllignerBoutons"
+Attribute VB_Name = "AllignerBoutons"
 Option Explicit
-' =============================================
-'           Alligner Boutons
-' =============================================
 
+' =============================================
+' 1. Alligner Boutons
+' =============================================
 Sub AlignerBoutons()
 
     ' =============================================
-    ' SEUL PARAMÃˆTRE Ã€ MODIFIER
+    ' SEUL PARAMÈTRE À MODIFIER
     Dim margeInterieure As Double: margeInterieure = 6  ' espace bord ? boutons (haut, bas, gauche, droite)
     ' =============================================
-    ' Taille des boutons calculÃ©e automatiquement
-    ' pour remplir Grand1 de faÃ§on homogÃ¨ne
+    ' Taille des boutons calculée automatiquement
+    ' pour remplir Grand1 de façon homogène
 
     Dim ws As Worksheet
     Set ws = ActiveSheet
@@ -25,11 +25,11 @@ Sub AlignerBoutons()
     Dim espaceH As Double  ' espace horizontal entre les 2 colonnes
     Dim espaceV As Double  ' espace vertical entre les 2 lignes
 
-    ' 2 colonnes ? largeur dispo partagÃ©e en 2
+    ' 2 colonnes ? largeur dispo partagée en 2
     largeurBouton = (grandRect.Width - (2 * margeInterieure) - margeInterieure) / 2
     espaceH = margeInterieure
 
-    ' 2 lignes ? hauteur dispo partagÃ©e en 2
+    ' 2 lignes ? hauteur dispo partagée en 2
     hauteurBouton = (grandRect.Height - (2 * margeInterieure) - margeInterieure) / 2
     espaceV = margeInterieure
 
@@ -60,15 +60,16 @@ Sub AlignerBoutons()
         .Left = left2: .Top = top2
     End With
 
-    MsgBox "Boutons alignÃ©s !", vbInformation
+    MsgBox "Boutons alignés !", vbInformation
 
 End Sub
-
+ 
+    ' =============================================
+    ' 2. AlignerBoutons2
+    ' =============================================
 Sub AlignerBoutons2()
 
-    ' =============================================
-    ' SEUL PARAMÃˆTRE Ã€ MODIFIER
-    ' =============================================
+  
     Dim margeInterieure As Double: margeInterieure = 6
     ' =============================================
 
@@ -111,11 +112,13 @@ Sub AlignerBoutons2()
         .Left = left2: .Top = top2
     End With
 
-    MsgBox "Boutons Grand2 alignÃ©s !", vbInformation
+    MsgBox "Boutons Grand2 alignés !", vbInformation
 
 End Sub
 
-
+    ' =============================================
+    ' 3. AlignerBoutons3
+    ' =============================================
 Sub AlignerBoutons3()
 
     Dim margeInterieure As Double: margeInterieure = 5
@@ -138,7 +141,7 @@ Sub AlignerBoutons3()
 
     ' ON ? bord gauche de Grand3
     Dim leftON  As Double: leftON = grandRect.Left + margeInterieure
-    ' OFF ? bord DROIT de Grand3 (indÃ©pendant de ON)
+    ' OFF ? bord DROIT de Grand3 (indépendant de ON)
     Dim leftOFF As Double: leftOFF = grandRect.Left + grandRect.Width - margeInterieure - largeurBouton
 
     ws.Shapes("ON").Width = largeurBouton
@@ -156,7 +159,6 @@ Sub AlignerBoutons3()
     ws.Shapes("SAUVEGARDER").Left = leftON
     ws.Shapes("SAUVEGARDER").Top = top2
 
-    MsgBox "Boutons Grand3 alignÃ©s !", vbInformation
+    MsgBox "Boutons Grand3 alignés !", vbInformation
 
 End Sub
-

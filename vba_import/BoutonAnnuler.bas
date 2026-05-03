@@ -50,7 +50,7 @@ Private RedoStack(1 To MAX_HISTORY) As UndoEntry
 Private RedoTop As Long
 
 ' =============================================
-'1.TableauRenseigne
+'1. TableauRenseigne
 ' =============================================
 Private Function TableauRenseigne(ByVal v As Variant) As Boolean
 
@@ -259,7 +259,7 @@ Private Sub ClearRedoStack()
 End Sub
 
 ' =============================================
-' 7-bis. TableauxAdressesEgaux
+' 8. TableauxAdressesEgaux
 ' =============================================
 Private Function TableauxAdressesEgaux(ByVal a As Variant, ByVal b As Variant) As Boolean
 
@@ -283,7 +283,7 @@ Private Function TableauxAdressesEgaux(ByVal a As Variant, ByVal b As Variant) A
 End Function
 
 ' =============================================
-' 7-ter. RetirerDernierUndoSiCorrespondAuBackup
+' 9. RetirerDernierUndoSiCorrespondAuBackup
 ' =============================================
 Private Sub RetirerDernierUndoSiCorrespondAuBackup()
 
@@ -299,7 +299,7 @@ Private Sub RetirerDernierUndoSiCorrespondAuBackup()
 End Sub
 
 ' =============================================
-' 8. ClearEntry
+' 10. ClearEntry
 ' =============================================
 Private Sub ClearEntry(ByRef entry As UndoEntry)
 
@@ -312,7 +312,7 @@ Private Sub ClearEntry(ByRef entry As UndoEntry)
 End Sub
 
 ' =============================================
-' 9. LibelleEntry
+' 11. LibelleEntry
 ' =============================================
 Private Function LibelleEntry(ByRef entry As UndoEntry) As String
 
@@ -327,7 +327,7 @@ Private Function LibelleEntry(ByRef entry As UndoEntry) As String
 End Function
 
 ' =============================================
-' 10. SauvegarderEtatCandidat
+' 12. SauvegarderEtatCandidat
 ' =============================================
 Public Sub SauvegarderEtatCandidat(ByVal rng As Range)
 
@@ -338,7 +338,7 @@ Public Sub SauvegarderEtatCandidat(ByVal rng As Range)
 End Sub
 
 ' =============================================
-' 11. SauvegarderEtat
+' 13. SauvegarderEtat
 ' =============================================
 Public Sub SauvegarderEtat(ByVal rng As Range)
 
@@ -362,7 +362,7 @@ Public Sub SauvegarderEtat(ByVal rng As Range)
 End Sub
 
 ' =============================================
-' 12. ValiderEtatCandidatCommeUndo
+' 14. ValiderEtatCandidatCommeUndo
 ' =============================================
 Public Sub ValiderEtatCandidatCommeUndo()
 
@@ -388,7 +388,7 @@ Public Sub ValiderEtatCandidatCommeUndo()
 End Sub
 
 ' =============================================
-' 13. AnnulerDerniereAction
+' 15. AnnulerDerniereAction
 ' =============================================
 Public Sub AnnulerDerniereAction()
 
@@ -440,7 +440,7 @@ Fin:
 End Sub
 
 ' =============================================
-' 14. AnnulerUnique
+' 16. AnnulerUnique
 ' =============================================
 ' Bouton "Annuler"
 Public Sub AnnulerUnique()
@@ -480,7 +480,7 @@ Fin:
 End Sub
 
 ' =============================================
-' 15. RefaireUnique
+' 17. RefaireUnique
 ' =============================================
 Public Sub RefaireUnique()
 
@@ -518,7 +518,7 @@ Fin:
 
 End Sub
 ' =============================================
-' 16. DebugAfficherHistorique
+' 18. DebugAfficherHistorique
 ' =============================================
 Public Sub DebugAfficherHistorique()
 
@@ -548,7 +548,7 @@ Public Sub DebugAfficherHistorique()
 End Sub
 
 ' =============================================
-' 17. DebugReinitialiserHistorique
+' 19. DebugReinitialiserHistorique
 ' =============================================
 Public Sub DebugReinitialiserHistorique()
 
@@ -579,7 +579,7 @@ Public Sub DebugReinitialiserHistorique()
 End Sub
 
 ' =============================================
-' 18. InvaliderEtatCandidat
+' 20. InvaliderEtatCandidat
 ' =============================================
 Public Sub InvaliderEtatCandidat()
 
@@ -592,7 +592,7 @@ Public Sub InvaliderEtatCandidat()
 End Sub
 
 ' =============================================
-' 19. ConstruireAdresseLignesImpactees
+' 21. ConstruireAdresseLignesImpactees
 ' =============================================
 Private Function ConstruireAdresseLignesImpactees(ByVal ws As Worksheet, _
                                                   ByVal mainAddresses As Variant, _
@@ -645,5 +645,3 @@ Private Function ConstruireAdresseLignesImpactees(ByVal ws As Worksheet, _
 Fin:
 
 End Function
-
-

@@ -199,5 +199,3 @@ Public Const ROW_REFERENTIEL_START As Long = 2
 Public Const MSG_VALEURS_LOCAL As String = "Local non autorisé."
 Public Const MSG_VALEURS_CARROYAGE As String = "Carroyage non autorisé."
 
-
-

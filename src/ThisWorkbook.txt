@@ -1,4 +1,5 @@
-﻿Option Explicit
+﻿Attribute VB_Name = "ThisWorkbook"
+Option Explicit
 
 ' ============================================================
 ' Open
@@ -83,9 +84,11 @@ Private Sub Workbook_Open()
         .ShowInput = True
         .ShowError = False
     End With
-
+    
     ModeDeveloppeur_OFF True
+     
     GMC.RafraichirCouleursConformite
+    MettreAJourCompteurs
     InitialiserPlaceholdersFeuillePrincipale
     UF_Agent.Show
 
@@ -176,4 +179,6 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error GoTo 0
 
 End Sub
+
+
 
